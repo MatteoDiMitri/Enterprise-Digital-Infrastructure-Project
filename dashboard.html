@@ -1,0 +1,1134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NEXUS — Observability Dashboard</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Instrument+Sans:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #0e1117;
+    --surface: #161b25;
+    --surface2: #1e2535;
+    --border: rgba(255,255,255,0.07);
+    --text: #e2e8f4;
+    --muted: #6b7a99;
+    --green: #22c55e;
+    --red: #ef4444;
+    --amber: #f59e0b;
+    --blue: #3b82f6;
+    --teal: #14b8a6;
+    --purple: #a78bfa;
+    --accent: #c84b2f;
+    --mono: 'DM Mono', monospace;
+    --sans: 'Instrument Sans', system-ui, sans-serif;
+    --radius: 6px;
+  }
+
+  html, body { background: var(--bg); color: var(--text); font-family: var(--sans); min-height: 100vh; }
+
+  /* ── TOPBAR ── */
+  .topbar {
+    height: 52px; border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 1.5rem; position: sticky; top: 0; z-index: 100;
+    background: var(--bg);
+  }
+  .topbar-left { display: flex; align-items: center; gap: 1.5rem; }
+  .logo { font-family: var(--mono); font-size: 15px; letter-spacing: 0.1em; color: var(--text); }
+  .logo span { color: var(--accent); }
+  .breadcrumb { font-family: var(--mono); font-size: 11px; color: var(--muted); }
+  .breadcrumb span { color: var(--text); }
+
+  .topbar-nav { display: flex; gap: 1.5rem; }
+  .topbar-nav a { font-size: 12px; color: var(--muted); text-decoration: none; letter-spacing: 0.04em; transition: color 0.15s; }
+  .topbar-nav a:hover, .topbar-nav a.active { color: var(--text); }
+
+  .topbar-right { display: flex; align-items: center; gap: 1rem; }
+  .status-pill {
+    display: flex; align-items: center; gap: 6px;
+    background: rgba(34,197,94,0.1); border: 1px solid rgba(34,197,94,0.2);
+    border-radius: 999px; padding: 4px 10px;
+    font-family: var(--mono); font-size: 10px; color: var(--green); letter-spacing: 0.06em;
+    transition: all 0.3s;
+  }
+  .status-pill.warning { background: rgba(245,158,11,0.1); border-color: rgba(245,158,11,0.2); color: var(--amber); }
+  .status-pill.danger  { background: rgba(239,68,68,0.1); border-color: rgba(239,68,68,0.2); color: var(--red); }
+  .status-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; animation: pulse-dot 2s ease infinite; }
+  @keyframes pulse-dot { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
+
+  .time-display { font-family: var(--mono); font-size: 11px; color: var(--muted); }
+
+  /* ── LAYOUT ── */
+  .layout { display: grid; grid-template-columns: 240px 1fr; min-height: calc(100vh - 52px); }
+
+  /* ── SIDEBAR ── */
+  .sidebar {
+    border-right: 1px solid var(--border);
+    padding: 1.5rem 0;
+    position: sticky; top: 52px; height: calc(100vh - 52px);
+    overflow-y: auto;
+  }
+  .sidebar-section { margin-bottom: 2rem; }
+  .sidebar-label { font-family: var(--mono); font-size: 9px; color: var(--muted); letter-spacing: 0.15em; text-transform: uppercase; padding: 0 1.25rem; margin-bottom: 0.5rem; }
+  .sidebar-item {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 1.25rem; font-size: 13px; color: var(--muted);
+    cursor: pointer; transition: all 0.15s; border-left: 2px solid transparent;
+    text-decoration: none;
+  }
+  .sidebar-item:hover { color: var(--text); background: rgba(255,255,255,0.03); }
+  .sidebar-item.active { color: var(--text); border-left-color: var(--blue); background: rgba(59,130,246,0.06); }
+  .sidebar-icon { font-size: 14px; width: 18px; text-align: center; }
+  .sidebar-badge {
+    margin-left: auto; font-family: var(--mono); font-size: 9px;
+    background: rgba(239,68,68,0.15); color: var(--red); border-radius: 999px;
+    padding: 2px 7px; letter-spacing: 0.04em;
+  }
+  .sidebar-badge.ok { background: rgba(34,197,94,0.1); color: var(--green); }
+  .sidebar-badge.warn { background: rgba(245,158,11,0.1); color: var(--amber); }
+
+  /* ── MAIN ── */
+  main { padding: 1.5rem; overflow: auto; }
+
+  /* ── SECTION HEADER ── */
+  .section-hd {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 1rem; padding-bottom: 0.75rem;
+    border-bottom: 1px solid var(--border);
+  }
+  .section-hd h2 { font-size: 13px; font-weight: 500; letter-spacing: 0.04em; color: var(--muted); text-transform: uppercase; font-family: var(--mono); }
+  .section-hd .section-actions { display: flex; gap: 8px; align-items: center; }
+
+  /* ── ACTIVE SCENARIO BANNER ── */
+  .scenario-banner {
+    display: none;
+    background: linear-gradient(90deg, rgba(245,158,11,0.12), rgba(245,158,11,0.04));
+    border: 1px solid rgba(245,158,11,0.25);
+    border-radius: var(--radius);
+    padding: 0.75rem 1.25rem;
+    margin-bottom: 1rem;
+    align-items: center; gap: 12px;
+  }
+  .scenario-banner.show { display: flex; }
+  .scenario-banner-icon { font-size: 18px; }
+  .scenario-banner-text { flex: 1; }
+  .scenario-banner-title { font-family: var(--mono); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--amber); margin-bottom: 2px; }
+  .scenario-banner-msg { font-size: 12px; color: var(--text); }
+  .scenario-banner-time { font-family: var(--mono); font-size: 12px; color: var(--amber); }
+
+  /* ── KPI CARDS ── 4 columns × 2 rows = 8 cards */
+  .kpi-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 1.5rem; }
+  .kpi-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 0.85rem 1rem;
+    transition: border-color 0.3s;
+  }
+  .kpi-card.warning { border-color: rgba(245,158,11,0.3); }
+  .kpi-card.danger { border-color: rgba(239,68,68,0.3); }
+  .kpi-label { font-family: var(--mono); font-size: 10px; color: var(--muted); letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 6px; }
+  .kpi-value { font-family: var(--mono); font-size: 1.5rem; font-weight: 500; line-height: 1; margin-bottom: 4px; }
+  .kpi-unit { font-size: 0.7em; color: var(--muted); margin-left: 2px; }
+  .kpi-delta { font-family: var(--mono); font-size: 10px; display: flex; align-items: center; gap: 4px; }
+  .delta-up { color: var(--green); }
+  .delta-down { color: var(--red); }
+  .delta-neutral { color: var(--muted); }
+
+  /* ── CHART CARDS ── */
+  .charts-row { display: grid; grid-template-columns: 2fr 1fr; gap: 12px; margin-bottom: 12px; }
+  .charts-row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px; }
+  .charts-row3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-bottom: 12px; }
+
+  .chart-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 1rem 1.25rem;
+  }
+  .chart-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem; }
+  .chart-title { font-family: var(--mono); font-size: 11px; color: var(--muted); letter-spacing: 0.08em; text-transform: uppercase; }
+  .chart-val { font-family: var(--mono); font-size: 13px; color: var(--text); }
+  .chart-canvas { position: relative; }
+  .chart-legend { display: flex; gap: 12px; margin-top: 6px; }
+  .legend-item { display: flex; align-items: center; gap: 5px; font-family: var(--mono); font-size: 10px; color: var(--muted); }
+  .legend-swatch { width: 9px; height: 2px; border-radius: 1px; }
+
+  /* ── SERVICE TOPOLOGY ── */
+  .topology-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .svc-node {
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 0.75rem 0.9rem;
+    display: flex; flex-direction: column; gap: 4px;
+    transition: all 0.3s;
+  }
+  .svc-node.healthy   { border-left: 3px solid var(--green); }
+  .svc-node.warning   { border-left: 3px solid var(--amber); }
+  .svc-node.degraded  { border-left: 3px solid var(--red); }
+  .svc-node.down      { border-left: 3px solid var(--red); opacity: 0.5; }
+  .svc-head { display: flex; align-items: center; justify-content: space-between; }
+  .svc-name { font-family: var(--mono); font-size: 12px; color: var(--text); font-weight: 500; }
+  .svc-status {
+    font-family: var(--mono); font-size: 9px; letter-spacing: 0.08em;
+    padding: 1px 6px; border-radius: 3px; text-transform: uppercase;
+  }
+  .svc-status.healthy  { background: rgba(34,197,94,0.15);  color: var(--green); }
+  .svc-status.warning  { background: rgba(245,158,11,0.15); color: var(--amber); }
+  .svc-status.degraded { background: rgba(239,68,68,0.15);  color: var(--red); }
+  .svc-status.down     { background: rgba(239,68,68,0.25);  color: var(--red); }
+  .svc-metrics { display: flex; gap: 12px; font-family: var(--mono); font-size: 10px; color: var(--muted); }
+  .svc-metrics b { color: var(--text); font-weight: 500; }
+
+  /* ── SCENARIO CONTROL PANEL ── */
+  .scenario-panel {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 1rem 1.25rem;
+    margin-bottom: 1.5rem;
+  }
+  .scenario-panel-head {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 0.75rem;
+  }
+  .scenario-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; }
+  .scenario-card {
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 0.85rem;
+    display: flex; flex-direction: column; gap: 8px;
+    transition: all 0.2s;
+  }
+  .scenario-card.active {
+    border-color: var(--amber);
+    box-shadow: 0 0 0 1px rgba(245,158,11,0.2);
+  }
+  .scenario-head { display: flex; align-items: center; gap: 8px; }
+  .scenario-icon { font-size: 1.1rem; }
+  .scenario-name { font-size: 13px; font-weight: 500; }
+  .scenario-desc { font-size: 11px; color: var(--muted); line-height: 1.5; flex: 1; min-height: 32px; }
+  .scenario-meta { font-family: var(--mono); font-size: 10px; color: var(--muted); }
+  .scenario-btn {
+    width: 100%; border: none; padding: 7px; border-radius: 4px;
+    font-family: var(--mono); font-size: 11px; font-weight: 500; letter-spacing: 0.05em;
+    cursor: pointer; transition: all 0.2s; text-transform: uppercase;
+  }
+  .btn-danger  { background: rgba(239,68,68,0.12);  color: var(--red);   border: 1px solid rgba(239,68,68,0.2); }
+  .btn-danger:hover { background: rgba(239,68,68,0.22); }
+  .btn-warning { background: rgba(245,158,11,0.12); color: var(--amber); border: 1px solid rgba(245,158,11,0.2); }
+  .btn-warning:hover { background: rgba(245,158,11,0.22); }
+  .btn-blue    { background: rgba(59,130,246,0.12); color: var(--blue);  border: 1px solid rgba(59,130,246,0.2); }
+  .btn-blue:hover { background: rgba(59,130,246,0.22); }
+  .btn-green   { background: rgba(34,197,94,0.12);  color: var(--green); border: 1px solid rgba(34,197,94,0.2); }
+  .btn-green:hover { background: rgba(34,197,94,0.22); }
+  .btn-purple  { background: rgba(167,139,250,0.12); color: var(--purple); border: 1px solid rgba(167,139,250,0.2); }
+  .btn-purple:hover { background: rgba(167,139,250,0.22); }
+
+  .scenario-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  .scenario-btn.running { animation: pulse-btn 1s ease infinite; }
+  @keyframes pulse-btn { 0%,100% { opacity: 1; } 50% { opacity: 0.6; } }
+
+  /* ── LOGS ── */
+  .logs-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); margin-bottom: 1.5rem;
+  }
+  .logs-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0.75rem 1.25rem; border-bottom: 1px solid var(--border);
+  }
+  .logs-title { font-family: var(--mono); font-size: 11px; color: var(--muted); letter-spacing: 0.08em; text-transform: uppercase; }
+  .logs-controls { display: flex; gap: 8px; }
+  .log-filter-btn {
+    font-family: var(--mono); font-size: 9px; letter-spacing: 0.06em; text-transform: uppercase;
+    padding: 3px 8px; border-radius: 3px; border: 1px solid var(--border); background: transparent;
+    color: var(--muted); cursor: pointer; transition: all 0.15s;
+  }
+  .log-filter-btn.active { background: rgba(255,255,255,0.08); color: var(--text); border-color: rgba(255,255,255,0.15); }
+  .logs-body { padding: 0.75rem 1.25rem; font-family: var(--mono); font-size: 11px; max-height: 280px; overflow-y: auto; line-height: 1.9; }
+  .log-line { display: flex; gap: 12px; align-items: baseline; }
+  .log-time { color: var(--muted); min-width: 70px; }
+  .log-level { min-width: 60px; text-align: center; font-weight: 500; }
+  .log-level.INFO { color: var(--blue); }
+  .log-level.WARN { color: var(--amber); }
+  .log-level.ERROR { color: var(--red); }
+  .log-level.CRITICAL { color: var(--red); background: rgba(239,68,68,0.12); border-radius: 3px; padding: 0 4px; }
+  .log-service { color: var(--purple); min-width: 75px; }
+  .log-msg { color: var(--text); flex: 1; }
+
+  /* ── TABLES ── */
+  .table-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); margin-bottom: 1.5rem; overflow: hidden;
+  }
+  .table-header {
+    padding: 0.75rem 1.25rem; border-bottom: 1px solid var(--border);
+    font-family: var(--mono); font-size: 11px; color: var(--muted);
+    letter-spacing: 0.08em; text-transform: uppercase;
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  th { font-family: var(--mono); font-size: 9px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--muted); padding: 8px 1.25rem; border-bottom: 1px solid var(--border); text-align: left; font-weight: 400; }
+  td { padding: 8px 1.25rem; border-bottom: 1px solid var(--border); color: var(--text); font-family: var(--mono); font-size: 11px; }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: rgba(255,255,255,0.02); }
+  .method { padding: 2px 8px; border-radius: 3px; font-size: 9px; letter-spacing: 0.06em; }
+  .method.GET { background: rgba(59,130,246,0.15); color: var(--blue); }
+  .method.POST { background: rgba(34,197,94,0.15); color: var(--green); }
+  .status-ok { color: var(--green); }
+  .status-warn { color: var(--amber); }
+  .status-err { color: var(--red); }
+  .slo-ok { color: var(--green); }
+  .slo-fail { color: var(--red); }
+
+  /* ── SMALL UTIL BUTTONS ── */
+  .btn-sm {
+    font-family: var(--mono); font-size: 10px; padding: 4px 10px; border-radius: 4px;
+    border: 1px solid var(--border); background: transparent; color: var(--muted); cursor: pointer;
+    transition: all 0.15s; letter-spacing: 0.05em;
+  }
+  .btn-sm:hover { background: rgba(255,255,255,0.06); color: var(--text); }
+
+  /* ── API STATUS PILL ── */
+  .api-status {
+    display: inline-flex; align-items: center; gap: 5px;
+    font-family: var(--mono); font-size: 10px; color: var(--muted);
+    padding: 2px 8px; border-radius: 3px; border: 1px solid var(--border);
+  }
+  .api-status.ok { color: var(--green); border-color: rgba(34,197,94,0.2); }
+  .api-status.down { color: var(--red); border-color: rgba(239,68,68,0.2); }
+
+  /* ── NOTIFICATION ── */
+  .notification {
+    position: fixed; top: 64px; right: 1.5rem;
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 12px 16px; z-index: 300;
+    max-width: 320px; font-size: 12px; line-height: 1.5;
+    transform: translateX(140%); transition: transform 0.3s cubic-bezier(0.4,0,0.2,1);
+    display: flex; align-items: flex-start; gap: 10px;
+  }
+  .notification.show { transform: translateX(0); }
+  .notif-icon { font-size: 16px; flex-shrink: 0; }
+  .notif-title { font-weight: 500; margin-bottom: 2px; }
+  .notif-msg { color: var(--muted); }
+
+  @media (max-width: 1100px) {
+    .kpi-grid { grid-template-columns: repeat(4, 1fr); }
+    .charts-row3 { grid-template-columns: 1fr 1fr; }
+  }
+  @media (max-width: 900px) {
+    .layout { grid-template-columns: 1fr; }
+    .sidebar { display: none; }
+    .kpi-grid { grid-template-columns: repeat(2, 1fr); }
+    .charts-row { grid-template-columns: 1fr; }
+    .charts-row2 { grid-template-columns: 1fr; }
+    .charts-row3 { grid-template-columns: 1fr; }
+    .topology-grid { grid-template-columns: 1fr 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<!-- TOPBAR -->
+<div class="topbar">
+  <div class="topbar-left">
+    <a href="shop.html" style="text-decoration:none" class="logo">NEXUS<span>.</span></a>
+    <span class="breadcrumb">/ <span>observability</span></span>
+    <nav class="topbar-nav">
+      <a href="shop.html">Shop</a>
+      <a href="team.html">Team</a>
+      <a href="#" class="active">Dashboard</a>
+    </nav>
+  </div>
+  <div class="topbar-right">
+    <span class="api-status" id="api-status">api: connecting…</span>
+    <div class="status-pill" id="slo-pill"><div class="status-dot"></div><span id="slo-text">All systems nominal</span></div>
+    <div class="time-display" id="clock">--:--:--</div>
+  </div>
+</div>
+
+<div class="layout">
+
+  <!-- SIDEBAR -->
+  <aside class="sidebar">
+    <div class="sidebar-section">
+      <div class="sidebar-label">Overview</div>
+      <div class="sidebar-item active"><span class="sidebar-icon">📊</span>Dashboard</div>
+      <div class="sidebar-item"><span class="sidebar-icon">📈</span>Metrics</div>
+      <div class="sidebar-item"><span class="sidebar-icon">📋</span>Logs</div>
+      <div class="sidebar-item"><span class="sidebar-icon">🧪</span>Experiments</div>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-label">Services</div>
+      <div class="sidebar-item" id="sb-nginx"><span class="sidebar-icon">⚡</span>Nginx <span class="sidebar-badge ok" id="sb-nginx-badge">UP</span></div>
+      <div class="sidebar-item" id="sb-fastapi"><span class="sidebar-icon">🐍</span>FastAPI <span class="sidebar-badge ok" id="sb-fastapi-badge">UP</span></div>
+      <div class="sidebar-item" id="sb-postgres"><span class="sidebar-icon">🐘</span>PostgreSQL <span class="sidebar-badge ok" id="sb-postgres-badge">UP</span></div>
+      <div class="sidebar-item" id="sb-redis"><span class="sidebar-icon">🔴</span>Redis <span class="sidebar-badge ok" id="sb-redis-badge">UP</span></div>
+      <div class="sidebar-item" id="sb-worker"><span class="sidebar-icon">⚙️</span>Worker <span class="sidebar-badge ok" id="sb-worker-badge">UP</span></div>
+      <div class="sidebar-item" id="sb-prometheus"><span class="sidebar-icon">📊</span>Prometheus <span class="sidebar-badge ok" id="sb-prometheus-badge">UP</span></div>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-label">Quick Links</div>
+      <div class="sidebar-item" onclick="window.open('http://localhost:3000','_blank')"><span class="sidebar-icon">🔗</span>Grafana UI</div>
+      <div class="sidebar-item" onclick="window.open('http://localhost:9090','_blank')"><span class="sidebar-icon">🔗</span>Prometheus UI</div>
+      <div class="sidebar-item" onclick="window.open('/api/metrics','_blank')"><span class="sidebar-icon">🔗</span>Raw API</div>
+    </div>
+  </aside>
+
+  <!-- MAIN -->
+  <main>
+
+    <!-- ACTIVE SCENARIO BANNER -->
+    <div class="scenario-banner" id="scenario-banner">
+      <div class="scenario-banner-icon" id="banner-icon">⚠️</div>
+      <div class="scenario-banner-text">
+        <div class="scenario-banner-title">Active Scenario</div>
+        <div class="scenario-banner-msg" id="banner-msg">—</div>
+      </div>
+      <div class="scenario-banner-time" id="banner-time">00:00</div>
+    </div>
+
+    <!-- KPIs -->
+    <div class="section-hd" style="margin-bottom: 1rem;">
+      <h2>System overview</h2>
+      <div class="section-actions">
+        <span class="api-status" id="last-update">last update: —</span>
+        <button class="btn-sm" onclick="refreshAll()">↺ Refresh</button>
+      </div>
+    </div>
+
+    <div class="kpi-grid">
+      <div class="kpi-card" id="kpi-card-rps">
+        <div class="kpi-label">Throughput</div>
+        <div class="kpi-value" id="kpi-rps" style="color: var(--blue);">— <span class="kpi-unit">req/s</span></div>
+        <div class="kpi-delta delta-neutral" id="kpi-rps-d">— vs baseline</div>
+      </div>
+      <div class="kpi-card" id="kpi-card-p99">
+        <div class="kpi-label">Latency p99</div>
+        <div class="kpi-value" id="kpi-p99" style="color: var(--green);">— <span class="kpi-unit">ms</span></div>
+        <div class="kpi-delta delta-neutral" id="kpi-p99-d">SLO &lt; 1000ms</div>
+      </div>
+      <div class="kpi-card" id="kpi-card-err">
+        <div class="kpi-label">Error rate</div>
+        <div class="kpi-value" id="kpi-err" style="color: var(--green);">— <span class="kpi-unit">%</span></div>
+        <div class="kpi-delta delta-neutral" id="kpi-err-d">SLO &lt; 2%</div>
+      </div>
+      <div class="kpi-card" id="kpi-card-avail">
+        <div class="kpi-label">Availability</div>
+        <div class="kpi-value" id="kpi-avail" style="color: var(--green);">— <span class="kpi-unit">%</span></div>
+        <div class="kpi-delta delta-neutral" id="kpi-avail-d">SLO &gt; 99%</div>
+      </div>
+      <div class="kpi-card" id="kpi-card-svcs">
+        <div class="kpi-label">Active services</div>
+        <div class="kpi-value" id="kpi-svcs" style="color: var(--green);">—</div>
+        <div class="kpi-delta delta-neutral" id="kpi-svcs-d">All healthy</div>
+      </div>
+      <div class="kpi-card" id="kpi-card-cpu">
+        <div class="kpi-label">CPU utilization</div>
+        <div class="kpi-value" id="kpi-cpu" style="color: var(--blue);">— <span class="kpi-unit">%</span></div>
+        <div class="kpi-delta delta-neutral" id="kpi-cpu-d">— headroom</div>
+      </div>
+      <div class="kpi-card" id="kpi-card-queue">
+        <div class="kpi-label">Queue depth</div>
+        <div class="kpi-value" id="kpi-queue" style="color: var(--blue);">—</div>
+        <div class="kpi-delta delta-neutral" id="kpi-queue-d">pending requests</div>
+      </div>
+      <div class="kpi-card" id="kpi-card-slo">
+        <div class="kpi-label">SLO compliance</div>
+        <div class="kpi-value" id="kpi-slo" style="color: var(--green);">OK</div>
+        <div class="kpi-delta delta-neutral" id="kpi-slo-d">all targets met</div>
+      </div>
+    </div>
+
+    <!-- CHARTS ROW 1: Latency percentiles + Status distribution -->
+    <div class="charts-row">
+      <div class="chart-card">
+        <div class="chart-header">
+          <span class="chart-title">Latency percentiles (ms) — last 90s</span>
+          <span class="chart-val" id="lat-now">P99 — ms</span>
+        </div>
+        <div class="chart-canvas" style="height: 180px;"><canvas id="latChart"></canvas></div>
+        <div class="chart-legend">
+          <span class="legend-item"><span class="legend-swatch" style="background:#3b82f6"></span>P50</span>
+          <span class="legend-item"><span class="legend-swatch" style="background:#f59e0b"></span>P95</span>
+          <span class="legend-item"><span class="legend-swatch" style="background:#ef4444"></span>P99</span>
+        </div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-header">
+          <span class="chart-title">HTTP status distribution</span>
+        </div>
+        <div class="chart-canvas" style="height: 180px;"><canvas id="errChart"></canvas></div>
+      </div>
+    </div>
+
+    <!-- CHARTS ROW 2: RPS + Error rate dual, Queue depth -->
+    <div class="charts-row2">
+      <div class="chart-card">
+        <div class="chart-header">
+          <span class="chart-title">Throughput (req/s) &amp; error rate (%)</span>
+          <span class="chart-val" id="rps-now">— req/s</span>
+        </div>
+        <div class="chart-canvas" style="height: 160px;"><canvas id="rpsChart"></canvas></div>
+        <div class="chart-legend">
+          <span class="legend-item"><span class="legend-swatch" style="background:#3b82f6"></span>RPS</span>
+          <span class="legend-item"><span class="legend-swatch" style="background:#ef4444"></span>Error %</span>
+        </div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-header">
+          <span class="chart-title">Queue depth &amp; DB latency (ms)</span>
+          <span class="chart-val" id="queue-now">— pending</span>
+        </div>
+        <div class="chart-canvas" style="height: 160px;"><canvas id="queueChart"></canvas></div>
+        <div class="chart-legend">
+          <span class="legend-item"><span class="legend-swatch" style="background:#a78bfa"></span>Queue depth</span>
+          <span class="legend-item"><span class="legend-swatch" style="background:#f59e0b"></span>DB latency ms</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- CHARTS ROW 3: Resources -->
+    <div class="charts-row2">
+      <div class="chart-card">
+        <div class="chart-header">
+          <span class="chart-title">CPU &amp; memory utilization (%)</span>
+        </div>
+        <div class="chart-canvas" style="height: 140px;"><canvas id="resChart"></canvas></div>
+        <div class="chart-legend">
+          <span class="legend-item"><span class="legend-swatch" style="background:#22c55e"></span>CPU</span>
+          <span class="legend-item"><span class="legend-swatch" style="background:#14b8a6"></span>Memory</span>
+        </div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-header">
+          <span class="chart-title">Service health topology</span>
+        </div>
+        <div class="topology-grid" id="topology"></div>
+      </div>
+    </div>
+
+    <!-- SCENARIO CONTROL -->
+    <div class="scenario-panel">
+      <div class="scenario-panel-head">
+        <h2 style="font-size: 13px; font-weight: 500; letter-spacing: 0.04em; color: var(--muted); text-transform: uppercase; font-family: var(--mono);">Scenario control panel</h2>
+        <button class="btn-sm" onclick="stopScenario()">■ Reset System</button>
+      </div>
+      <div class="scenario-grid">
+        <div class="scenario-card" id="sc-baseline">
+          <div class="scenario-head"><span class="scenario-icon">📊</span><span class="scenario-name">Baseline Load</span></div>
+          <div class="scenario-desc">Steady traffic at ~40 RPS, low latency, healthy services. The reference state.</div>
+          <div class="scenario-meta">Duration: 120s · Expected SLO: ✓</div>
+          <button class="scenario-btn btn-green" onclick="runScenario('baseline','Baseline Load','📊')">▶ Run scenario</button>
+        </div>
+        <div class="scenario-card" id="sc-flash_crowd">
+          <div class="scenario-head"><span class="scenario-icon">🔥</span><span class="scenario-name">Flash Crowd</span></div>
+          <div class="scenario-desc">Traffic spikes to 10× baseline in 15s. Queues saturate, P99 latency breaches SLO.</div>
+          <div class="scenario-meta">Duration: 90s · Expected SLO: ✗</div>
+          <button class="scenario-btn btn-danger" onclick="runScenario('flash_crowd','Flash Crowd','🔥')">▶ Run scenario</button>
+        </div>
+        <div class="scenario-card" id="sc-error_cascade">
+          <div class="scenario-head"><span class="scenario-icon">💥</span><span class="scenario-name">Backend Error Cascade</span></div>
+          <div class="scenario-desc">FastAPI returns 5xx, errors propagate to nginx and workers via retries.</div>
+          <div class="scenario-meta">Duration: 90s · Expected SLO: ✗</div>
+          <button class="scenario-btn btn-danger" onclick="runScenario('error_cascade','Backend Error Cascade','💥')">▶ Run scenario</button>
+        </div>
+        <div class="scenario-card" id="sc-db_slowdown">
+          <div class="scenario-head"><span class="scenario-icon">🐢</span><span class="scenario-name">Database Slowdown</span></div>
+          <div class="scenario-desc">DB query latency climbs to ~800ms (unindexed queries), dragging the stack with it.</div>
+          <div class="scenario-meta">Duration: 120s · Expected SLO: ✗</div>
+          <button class="scenario-btn btn-warning" onclick="runScenario('db_slowdown','Database Slowdown','🐢')">▶ Run scenario</button>
+        </div>
+        <div class="scenario-card" id="sc-container_crash">
+          <div class="scenario-head"><span class="scenario-icon">💀</span><span class="scenario-name">Container Crash</span></div>
+          <div class="scenario-desc">FastAPI container killed, Docker auto-restart kicks in. Measures MTTR.</div>
+          <div class="scenario-meta">Duration: 90s · Expected SLO: ✗</div>
+          <button class="scenario-btn btn-purple" onclick="runScenario('container_crash','Container Crash','💀')">▶ Run scenario</button>
+        </div>
+        <div class="scenario-card" id="sc-suspicious">
+          <div class="scenario-head"><span class="scenario-icon">🕵️</span><span class="scenario-name">Suspicious Requests</span></div>
+          <div class="scenario-desc">SQL injection patterns from 3 IPs trigger rate limiting. 4xx spikes, SLO preserved.</div>
+          <div class="scenario-meta">Duration: 90s · Expected SLO: ✓</div>
+          <button class="scenario-btn btn-blue" onclick="runScenario('suspicious','Suspicious Requests','🕵️')">▶ Run scenario</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ENDPOINT TABLE -->
+    <div class="table-card">
+      <div class="table-header">API endpoint health</div>
+      <table>
+        <thead>
+          <tr>
+            <th>Method</th><th>Endpoint</th><th>Avg latency</th><th>p95</th><th>Error rate</th><th>Calls / min</th><th>Status</th>
+          </tr>
+        </thead>
+        <tbody id="endpoint-table"></tbody>
+      </table>
+    </div>
+
+    <!-- EXPERIMENTS TABLE -->
+    <div class="table-card">
+      <div class="table-header">
+        <span>Experiment summary — past scenario runs</span>
+        <button class="btn-sm" onclick="exportExperimentsCSV()">⤓ Export CSV</button>
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th>Scenario</th><th>Started</th><th>Duration</th>
+            <th>Peak RPS</th><th>Peak P99</th><th>Peak err %</th>
+            <th>Recovery</th><th>SLO</th><th>Notes</th>
+          </tr>
+        </thead>
+        <tbody id="experiments-table"><tr><td colspan="9" style="text-align:center;color:var(--muted);">No experiments yet — run a scenario above to populate.</td></tr></tbody>
+      </table>
+    </div>
+
+    <!-- LOGS -->
+    <div class="logs-card">
+      <div class="logs-header">
+        <span class="logs-title">Live system logs</span>
+        <div class="logs-controls">
+          <button class="log-filter-btn active" onclick="setLogFilter('all',this)">All</button>
+          <button class="log-filter-btn" onclick="setLogFilter('INFO',this)">Info</button>
+          <button class="log-filter-btn" onclick="setLogFilter('WARN',this)">Warn</button>
+          <button class="log-filter-btn" onclick="setLogFilter('ERROR',this)">Error</button>
+          <button class="log-filter-btn" onclick="setLogFilter('CRITICAL',this)">Critical</button>
+        </div>
+      </div>
+      <div class="logs-body" id="logs-body"><div class="log-line"><span class="log-msg" style="color:var(--muted);">Waiting for log data…</span></div></div>
+    </div>
+
+  </main>
+</div>
+
+<!-- NOTIFICATION -->
+<div class="notification" id="notif">
+  <div class="notif-icon" id="notif-icon">🔔</div>
+  <div>
+    <div class="notif-title" id="notif-title"></div>
+    <div class="notif-msg" id="notif-msg"></div>
+  </div>
+</div>
+
+<script>
+// ─────────────────────────────────────────────────────────────────────────────
+// CONFIG
+// ─────────────────────────────────────────────────────────────────────────────
+const API_BASE = ''; // empty = same origin as the served HTML (Flask)
+const POLL_MS  = 1500;
+const SVCS     = ['nginx', 'fastapi', 'postgres', 'redis', 'worker', 'prometheus'];
+const SVC_ICONS = { nginx:'⚡', fastapi:'🐍', postgres:'🐘', redis:'🔴', worker:'⚙️', prometheus:'📊' };
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CLOCK
+// ─────────────────────────────────────────────────────────────────────────────
+function updateClock() {
+  document.getElementById('clock').textContent = new Date().toLocaleTimeString('it-IT');
+}
+setInterval(updateClock, 1000);
+updateClock();
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CHARTS
+// ─────────────────────────────────────────────────────────────────────────────
+const gridColor = 'rgba(255,255,255,0.04)';
+const baseLineOpts = {
+  responsive: true, maintainAspectRatio: false, animation: false,
+  plugins: { legend: { display: false }, tooltip: { enabled: true, mode: 'index', intersect: false } },
+  interaction: { mode: 'index', intersect: false },
+  scales: {
+    x: { display: false },
+    y: { grid: { color: gridColor }, ticks: { color: '#6b7a99', font: { family: "'DM Mono'", size: 9 }, maxTicksLimit: 4 }, border: { display: false }, beginAtZero: true }
+  }
+};
+
+// Latency: 3 series (P50, P95, P99)
+const latChart = new Chart(document.getElementById('latChart').getContext('2d'), {
+  type: 'line',
+  data: {
+    labels: Array.from({length:60}, () => ''),
+    datasets: [
+      { label: 'P50', data: Array(60).fill(0), borderColor: '#3b82f6', backgroundColor: 'rgba(59,130,246,0.05)', borderWidth: 1.2, fill: false, tension: 0.3, pointRadius: 0 },
+      { label: 'P95', data: Array(60).fill(0), borderColor: '#f59e0b', backgroundColor: 'rgba(245,158,11,0.05)', borderWidth: 1.2, fill: false, tension: 0.3, pointRadius: 0 },
+      { label: 'P99', data: Array(60).fill(0), borderColor: '#ef4444', backgroundColor: 'rgba(239,68,68,0.10)', borderWidth: 1.5, fill: true,  tension: 0.3, pointRadius: 0 },
+    ]
+  },
+  options: baseLineOpts,
+});
+
+// RPS + error rate (dual axis)
+const rpsChart = new Chart(document.getElementById('rpsChart').getContext('2d'), {
+  type: 'line',
+  data: {
+    labels: Array.from({length:60}, () => ''),
+    datasets: [
+      { label: 'RPS',    data: Array(60).fill(0), borderColor: '#3b82f6', backgroundColor: 'rgba(59,130,246,0.10)', borderWidth: 1.4, fill: true, tension: 0.3, pointRadius: 0, yAxisID: 'y' },
+      { label: 'Err %',  data: Array(60).fill(0), borderColor: '#ef4444', backgroundColor: 'rgba(239,68,68,0)',     borderWidth: 1.4, fill: false, tension: 0.3, pointRadius: 0, yAxisID: 'y1' },
+    ]
+  },
+  options: {
+    ...baseLineOpts,
+    scales: {
+      x: { display: false },
+      y:  { position: 'left',  grid: { color: gridColor }, ticks: { color: '#3b82f6', font: { family: "'DM Mono'", size: 9 }, maxTicksLimit: 4 }, border: { display: false }, beginAtZero: true },
+      y1: { position: 'right', grid: { display: false },   ticks: { color: '#ef4444', font: { family: "'DM Mono'", size: 9 }, maxTicksLimit: 4 }, border: { display: false }, beginAtZero: true },
+    }
+  },
+});
+
+// Queue depth + DB latency
+const queueChart = new Chart(document.getElementById('queueChart').getContext('2d'), {
+  type: 'line',
+  data: {
+    labels: Array.from({length:60}, () => ''),
+    datasets: [
+      { label: 'Queue', data: Array(60).fill(0), borderColor: '#a78bfa', backgroundColor: 'rgba(167,139,250,0.10)', borderWidth: 1.4, fill: true, tension: 0.3, pointRadius: 0, yAxisID: 'y' },
+      { label: 'DB ms', data: Array(60).fill(0), borderColor: '#f59e0b', backgroundColor: 'rgba(245,158,11,0)',     borderWidth: 1.4, fill: false, tension: 0.3, pointRadius: 0, yAxisID: 'y1' },
+    ]
+  },
+  options: {
+    ...baseLineOpts,
+    scales: {
+      x: { display: false },
+      y:  { position: 'left',  grid: { color: gridColor }, ticks: { color: '#a78bfa', font: { family: "'DM Mono'", size: 9 }, maxTicksLimit: 4 }, border: { display: false }, beginAtZero: true },
+      y1: { position: 'right', grid: { display: false },   ticks: { color: '#f59e0b', font: { family: "'DM Mono'", size: 9 }, maxTicksLimit: 4 }, border: { display: false }, beginAtZero: true },
+    }
+  },
+});
+
+// CPU + memory
+const resChart = new Chart(document.getElementById('resChart').getContext('2d'), {
+  type: 'line',
+  data: {
+    labels: Array.from({length:60}, () => ''),
+    datasets: [
+      { label: 'CPU',    data: Array(60).fill(0), borderColor: '#22c55e', backgroundColor: 'rgba(34,197,94,0.08)',  borderWidth: 1.4, fill: true, tension: 0.3, pointRadius: 0 },
+      { label: 'Memory', data: Array(60).fill(0), borderColor: '#14b8a6', backgroundColor: 'rgba(20,184,166,0.05)', borderWidth: 1.4, fill: false, tension: 0.3, pointRadius: 0 },
+    ]
+  },
+  options: { ...baseLineOpts, scales: { ...baseLineOpts.scales, y: { ...baseLineOpts.scales.y, max: 100 } } },
+});
+
+// Status distribution donut
+const errChart = new Chart(document.getElementById('errChart').getContext('2d'), {
+  type: 'doughnut',
+  data: {
+    labels: ['2xx OK', '3xx Redirect', '4xx Client error', '5xx Server error'],
+    datasets: [{ data: [1,0,0,0], backgroundColor: ['#22c55e','#a78bfa','#f59e0b','#ef4444'], borderWidth: 0, hoverOffset: 4 }]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false, animation: false,
+    plugins: {
+      legend: { display: true, position: 'right', labels: { color: '#6b7a99', font: { family:"'DM Mono'", size: 9 }, boxWidth: 10, padding: 8 } },
+      tooltip: { enabled: true }
+    },
+    cutout: '65%'
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// DATA FETCH / UPDATE LOOP
+// ─────────────────────────────────────────────────────────────────────────────
+let lastApiOk = false;
+
+async function fetchJSON(path) {
+  const r = await fetch(API_BASE + path, { cache: 'no-store' });
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  return r.json();
+}
+
+function setApiStatus(ok, text) {
+  const el = document.getElementById('api-status');
+  el.classList.remove('ok', 'down');
+  el.classList.add(ok ? 'ok' : 'down');
+  el.textContent = text;
+}
+
+async function pollMetrics() {
+  try {
+    const m = await fetchJSON('/api/metrics');
+    if (!lastApiOk) {
+      lastApiOk = true;
+      setApiStatus(true, 'api: connected');
+    }
+    document.getElementById('last-update').textContent = 'last update: ' + new Date().toLocaleTimeString('it-IT');
+    renderMetrics(m);
+  } catch (e) {
+    lastApiOk = false;
+    setApiStatus(false, 'api: offline');
+  }
+
+  try {
+    const state = await fetchJSON('/api/state');
+    renderBanner(state);
+  } catch (e) { /* ignore */ }
+}
+
+async function pollLogs() {
+  try {
+    const logs = await fetchJSON('/api/logs?limit=80&level=' + (logFilter === 'all' ? 'all' : logFilter));
+    renderLogs(logs);
+  } catch (e) { /* ignore */ }
+}
+
+async function pollExperiments() {
+  try {
+    const e = await fetchJSON('/api/experiments');
+    renderExperiments(e.runs || []);
+  } catch (err) { /* ignore */ }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// RENDER
+// ─────────────────────────────────────────────────────────────────────────────
+function setKpi(card, valueId, value, deltaId, deltaText, severity) {
+  document.getElementById(valueId).innerHTML = value;
+  document.getElementById(deltaId).textContent = deltaText;
+  const cardEl = document.getElementById(card);
+  cardEl.classList.remove('warning', 'danger');
+  if (severity === 'warn')   cardEl.classList.add('warning');
+  if (severity === 'danger') cardEl.classList.add('danger');
+}
+
+function colorFor(value, warnAbove, dangerAbove) {
+  if (value > dangerAbove) return 'var(--red)';
+  if (value > warnAbove)   return 'var(--amber)';
+  return 'var(--green)';
+}
+
+function renderMetrics(m) {
+  const k = m.kpi || {};
+
+  // KPI cards
+  document.getElementById('kpi-rps').innerHTML   = `${k.rps ?? '—'} <span class="kpi-unit">req/s</span>`;
+  document.getElementById('kpi-rps-d').textContent = m.scenario === 'idle'
+    ? 'baseline state'
+    : `scenario: ${m.scenario}`;
+
+  document.getElementById('kpi-p99').innerHTML   = `${k.latency_p99 ?? '—'} <span class="kpi-unit">ms</span>`;
+  document.getElementById('kpi-p99').style.color = colorFor(k.latency_p99 || 0, 500, 1000);
+  document.getElementById('kpi-card-p99').classList.toggle('warning', (k.latency_p99 || 0) > 500 && (k.latency_p99 || 0) <= 1000);
+  document.getElementById('kpi-card-p99').classList.toggle('danger',  (k.latency_p99 || 0) > 1000);
+  document.getElementById('kpi-p99-d').textContent = (k.latency_p99 || 0) > 1000 ? 'SLO breach ✗' : 'SLO < 1000ms ✓';
+
+  document.getElementById('kpi-err').innerHTML   = `${(k.error_rate ?? 0).toFixed(1)} <span class="kpi-unit">%</span>`;
+  document.getElementById('kpi-err').style.color = colorFor(k.error_rate || 0, 2, 10);
+  document.getElementById('kpi-card-err').classList.toggle('warning', (k.error_rate || 0) > 2 && (k.error_rate || 0) <= 10);
+  document.getElementById('kpi-card-err').classList.toggle('danger',  (k.error_rate || 0) > 10);
+  document.getElementById('kpi-err-d').textContent = (k.error_rate || 0) > 2 ? 'SLO breach ✗' : 'SLO < 2% ✓';
+
+  document.getElementById('kpi-avail').innerHTML = `${(k.availability ?? 0).toFixed(2)} <span class="kpi-unit">%</span>`;
+  document.getElementById('kpi-avail').style.color = (k.availability || 0) < 99 ? 'var(--red)' : (k.availability || 0) < 99.5 ? 'var(--amber)' : 'var(--green)';
+  document.getElementById('kpi-card-avail').classList.toggle('danger', (k.availability || 0) < 99);
+  document.getElementById('kpi-avail-d').textContent = (k.availability || 0) >= 99 ? 'above SLO target' : 'below SLO target';
+
+  document.getElementById('kpi-svcs').textContent  = k.active_services ?? '—';
+  const [hh, tt] = (k.active_services || '0/0').split('/').map(Number);
+  document.getElementById('kpi-svcs').style.color = hh < tt ? 'var(--red)' : 'var(--green)';
+  document.getElementById('kpi-card-svcs').classList.toggle('danger', hh < tt);
+  document.getElementById('kpi-svcs-d').textContent = hh < tt ? `${tt - hh} service${tt - hh === 1 ? '' : 's'} down/degraded` : 'all healthy';
+
+  document.getElementById('kpi-cpu').innerHTML   = `${k.cpu ?? '—'} <span class="kpi-unit">%</span>`;
+  document.getElementById('kpi-cpu').style.color = colorFor(k.cpu || 0, 70, 90);
+  document.getElementById('kpi-cpu-d').textContent = `${100 - (k.cpu || 0)}% headroom`;
+
+  document.getElementById('kpi-queue').textContent  = k.queue_depth ?? '—';
+  document.getElementById('kpi-queue').style.color  = colorFor(k.queue_depth || 0, 20, 50);
+  document.getElementById('kpi-queue-d').textContent = (k.queue_depth || 0) > 20 ? 'congestion' : 'pending requests';
+
+  const slo = k.slo_status || 'ok';
+  const sloLabel = { ok: 'OK', at_risk: 'AT RISK', violation: 'VIOLATION' }[slo];
+  const sloColor = { ok: 'var(--green)', at_risk: 'var(--amber)', violation: 'var(--red)' }[slo];
+  document.getElementById('kpi-slo').textContent = sloLabel;
+  document.getElementById('kpi-slo').style.color = sloColor;
+  document.getElementById('kpi-card-slo').classList.toggle('warning', slo === 'at_risk');
+  document.getElementById('kpi-card-slo').classList.toggle('danger',  slo === 'violation');
+  document.getElementById('kpi-slo-d').textContent = {
+    ok: 'all targets met',
+    at_risk: 'thresholds approaching',
+    violation: 'one or more targets breached',
+  }[slo];
+
+  // Topbar SLO pill
+  const pill = document.getElementById('slo-pill');
+  pill.classList.remove('warning', 'danger');
+  if (slo === 'at_risk') pill.classList.add('warning');
+  if (slo === 'violation') pill.classList.add('danger');
+  document.getElementById('slo-text').textContent = {
+    ok: 'All systems nominal',
+    at_risk: 'SLO at risk',
+    violation: 'SLO violation',
+  }[slo];
+
+  // "Current value" labels next to chart titles
+  document.getElementById('lat-now').textContent = `P99 ${k.latency_p99 || 0}ms`;
+  document.getElementById('rps-now').textContent = `${k.rps || 0} req/s · ${(k.error_rate || 0).toFixed(1)}%`;
+  document.getElementById('queue-now').textContent = `${k.queue_depth || 0} pending`;
+
+  // Charts — replace data outright (the backend keeps history for us)
+  const h = m.history || {};
+  if (h.latency_p50 && h.latency_p95 && h.latency_p99) {
+    latChart.data.datasets[0].data = h.latency_p50;
+    latChart.data.datasets[1].data = h.latency_p95;
+    latChart.data.datasets[2].data = h.latency_p99;
+    latChart.data.labels = new Array(h.latency_p99.length).fill('');
+    latChart.update('none');
+  }
+  if (h.rps && h.error_rate) {
+    rpsChart.data.datasets[0].data = h.rps;
+    rpsChart.data.datasets[1].data = h.error_rate;
+    rpsChart.data.labels = new Array(h.rps.length).fill('');
+    rpsChart.update('none');
+  }
+  if (h.queue_depth && h.db_latency) {
+    queueChart.data.datasets[0].data = h.queue_depth;
+    queueChart.data.datasets[1].data = h.db_latency;
+    queueChart.data.labels = new Array(h.queue_depth.length).fill('');
+    queueChart.update('none');
+  }
+  if (h.cpu && h.memory) {
+    resChart.data.datasets[0].data = h.cpu;
+    resChart.data.datasets[1].data = h.memory;
+    resChart.data.labels = new Array(h.cpu.length).fill('');
+    resChart.update('none');
+  }
+
+  // Status distribution donut
+  const sd = m.status_distribution || { '2xx': 1, '3xx': 0, '4xx': 0, '5xx': 0 };
+  errChart.data.datasets[0].data = [sd['2xx'], sd['3xx'], sd['4xx'], sd['5xx']];
+  errChart.update('none');
+
+  // Service topology
+  renderTopology(m.services || {});
+
+  // Endpoint table
+  renderEndpoints(m.endpoints || []);
+}
+
+function renderTopology(services) {
+  const container = document.getElementById('topology');
+  container.innerHTML = SVCS.map(name => {
+    const s = services[name] || { status: 'unknown', latency: 0, error_rate: 0 };
+    const icon = SVC_ICONS[name] || '•';
+    return `
+      <div class="svc-node ${s.status}">
+        <div class="svc-head">
+          <span class="svc-name">${icon} ${name}</span>
+          <span class="svc-status ${s.status}">${s.status}</span>
+        </div>
+        <div class="svc-metrics">
+          <span><b>${s.latency || 0}</b>ms</span>
+          <span><b>${(s.error_rate || 0).toFixed(1)}</b>% err</span>
+        </div>
+      </div>`;
+  }).join('');
+
+  // Sidebar service badges
+  SVCS.forEach(name => {
+    const badge = document.getElementById(`sb-${name}-badge`);
+    if (!badge) return;
+    const s = services[name] || { status: 'healthy' };
+    badge.classList.remove('ok', 'warn');
+    if (s.status === 'healthy') { badge.classList.add('ok'); badge.textContent = 'UP'; }
+    else if (s.status === 'warning') { badge.classList.add('warn'); badge.textContent = 'WARN'; }
+    else if (s.status === 'degraded') { badge.textContent = 'DEGRADED'; }
+    else if (s.status === 'down') { badge.textContent = 'DOWN'; }
+    else { badge.classList.add('ok'); badge.textContent = 'UP'; }
+  });
+}
+
+function renderEndpoints(endpoints) {
+  const tbody = document.getElementById('endpoint-table');
+  if (!endpoints.length) { tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--muted);">No endpoint data.</td></tr>'; return; }
+  tbody.innerHTML = endpoints.map(ep => {
+    const statusClass = ep.status === 'degraded' ? 'status-err' : ep.status === 'warning' ? 'status-warn' : 'status-ok';
+    const statusText  = ep.status === 'degraded' ? '↑ degraded' : ep.status === 'warning' ? '~ warning' : '✓ healthy';
+    return `<tr>
+      <td><span class="method ${ep.method}">${ep.method}</span></td>
+      <td>${ep.path}</td>
+      <td>${ep.latency}ms</td>
+      <td>${ep.p95}ms</td>
+      <td class="${statusClass}">${ep.error_rate}%</td>
+      <td>${ep.rpm}</td>
+      <td class="${statusClass}">${statusText}</td>
+    </tr>`;
+  }).join('');
+}
+
+let currentExperiments = [];
+function renderExperiments(runs) {
+  currentExperiments = runs;
+  const tbody = document.getElementById('experiments-table');
+  if (!runs.length) {
+    tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:var(--muted);">No experiments yet — run a scenario above to populate.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = runs.slice().reverse().map(r => {
+    const sloCls = r.slo_met ? 'slo-ok' : 'slo-fail';
+    const sloTxt = r.slo_met ? '✓ met' : '✗ breach';
+    const rec    = r.recovery_sec != null ? `${r.recovery_sec}s` : '—';
+    const time   = new Date(r.started_at).toLocaleTimeString('it-IT');
+    return `<tr>
+      <td>${r.scenario}</td>
+      <td>${time}</td>
+      <td>${r.duration_sec}s</td>
+      <td>${r.peak_rps}</td>
+      <td>${r.peak_latency_p99}ms</td>
+      <td>${r.peak_error_rate}%</td>
+      <td>${rec}</td>
+      <td class="${sloCls}">${sloTxt}</td>
+      <td style="max-width:280px;white-space:normal;color:var(--muted);">${r.notes || ''}</td>
+    </tr>`;
+  }).join('');
+}
+
+function exportExperimentsCSV() {
+  if (!currentExperiments.length) { showNotif('⚠️', 'Nothing to export', 'Run at least one scenario first.'); return; }
+  const header = ['scenario','started_at','duration_sec','peak_rps','peak_latency_p99_ms','peak_error_rate','recovery_sec','slo_met','notes'];
+  const rows = currentExperiments.map(r => [
+    r.scenario, r.started_at, r.duration_sec, r.peak_rps, r.peak_latency_p99, r.peak_error_rate,
+    r.recovery_sec ?? '', r.slo_met, `"${(r.notes || '').replace(/"/g,'""')}"`
+  ]);
+  const csv = [header.join(','), ...rows.map(r => r.join(','))].join('\n');
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `nexus_experiments_${Date.now()}.csv`;
+  a.click();
+  showNotif('⤓', 'Exported', `${currentExperiments.length} experiment(s) exported as CSV.`);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ACTIVE SCENARIO BANNER
+// ─────────────────────────────────────────────────────────────────────────────
+let activeScenarioStart = null;
+function renderBanner(state) {
+  const banner = document.getElementById('scenario-banner');
+  if (!state.active) {
+    banner.classList.remove('show');
+    activeScenarioStart = null;
+    // Re-enable all scenario buttons
+    document.querySelectorAll('.scenario-btn').forEach(b => {
+      b.disabled = false; b.classList.remove('running'); b.textContent = '▶ Run scenario';
+    });
+    document.querySelectorAll('.scenario-card').forEach(c => c.classList.remove('active'));
+    return;
+  }
+  banner.classList.add('show');
+  const labels = {
+    baseline: ['📊', 'Baseline load — generating steady traffic at ~40 RPS.'],
+    flash_crowd: ['🔥', 'Flash crowd — traffic spike up to 10× baseline.'],
+    error_cascade: ['💥', 'Backend error cascade — fastapi failures propagating.'],
+    db_slowdown: ['🐢', 'Database slowdown — query latency degraded.'],
+    container_crash: ['💀', 'Container crash — fastapi down, Docker auto-restart pending.'],
+    suspicious: ['🕵️', 'Suspicious requests — rate-limiting active on flagged IPs.'],
+  };
+  const [icon, msg] = labels[state.active] || ['⚠️', state.active];
+  document.getElementById('banner-icon').textContent = icon;
+  document.getElementById('banner-msg').textContent  = msg;
+  if (!activeScenarioStart) activeScenarioStart = new Date(state.started_at);
+  const secs = Math.max(0, Math.floor((Date.now() - activeScenarioStart) / 1000));
+  document.getElementById('banner-time').textContent =
+    `${String(Math.floor(secs/60)).padStart(2,'0')}:${String(secs%60).padStart(2,'0')}`;
+
+  // Highlight the active scenario card and disable other buttons
+  document.querySelectorAll('.scenario-card').forEach(c => c.classList.remove('active'));
+  const card = document.getElementById('sc-' + state.active);
+  if (card) {
+    card.classList.add('active');
+    const btn = card.querySelector('.scenario-btn');
+    if (btn) { btn.disabled = true; btn.classList.add('running'); btn.textContent = '⏳ Running…'; }
+  }
+  // Disable everyone else
+  document.querySelectorAll('.scenario-card').forEach(c => {
+    if (c.id !== 'sc-' + state.active) {
+      const b = c.querySelector('.scenario-btn');
+      if (b) b.disabled = true;
+    }
+  });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// LOGS
+// ─────────────────────────────────────────────────────────────────────────────
+let logFilter = 'all';
+function setLogFilter(f, el) {
+  logFilter = f;
+  document.querySelectorAll('.log-filter-btn').forEach(b => b.classList.remove('active'));
+  el.classList.add('active');
+  pollLogs();
+}
+function renderLogs(entries) {
+  const container = document.getElementById('logs-body');
+  if (!entries.length) { container.innerHTML = '<div class="log-line"><span class="log-msg" style="color:var(--muted);">No logs matching this filter.</span></div>'; return; }
+  container.innerHTML = entries.map(e => {
+    const t = new Date(e.timestamp).toLocaleTimeString('it-IT');
+    return `<div class="log-line">
+      <span class="log-time">${t}</span>
+      <span class="log-level ${e.level}">${e.level}</span>
+      <span class="log-service">${e.service || ''}</span>
+      <span class="log-msg">${e.message}</span>
+    </div>`;
+  }).join('');
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SCENARIO ACTIONS
+// ─────────────────────────────────────────────────────────────────────────────
+async function runScenario(name, label, icon) {
+  try {
+    const r = await fetch(API_BASE + `/api/scenario/${name}/start`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({}) });
+    const data = await r.json();
+    if (!r.ok) {
+      showNotif('⚠️', 'Cannot start', data.error || 'Unknown error.');
+      return;
+    }
+    showNotif(icon, `${label} started`, 'Scenario launched. Watch the metrics update live.');
+    // Refresh experiments after expected duration so the new row appears.
+    setTimeout(pollExperiments, 3000);
+    setTimeout(pollExperiments, 30000);
+    setTimeout(pollExperiments, 120000);
+  } catch (e) {
+    showNotif('⚠️', 'API unreachable', 'Is the mock_api server running on port 5055?');
+  }
+}
+
+async function stopScenario() {
+  try {
+    await fetch(API_BASE + '/api/scenario/stop', { method: 'POST' });
+    showNotif('✅', 'System reset', 'All scenarios stopped. Metrics restored to baseline.');
+    setTimeout(pollExperiments, 1000);
+  } catch (e) {
+    showNotif('⚠️', 'API unreachable', 'Could not reach the API.');
+  }
+}
+
+function refreshAll() {
+  pollMetrics(); pollLogs(); pollExperiments();
+  showNotif('↺', 'Refreshed', 'All data refreshed.');
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// NOTIFICATION
+// ─────────────────────────────────────────────────────────────────────────────
+let notifTimer;
+function showNotif(icon, title, msg) {
+  document.getElementById('notif-icon').textContent = icon;
+  document.getElementById('notif-title').textContent = title;
+  document.getElementById('notif-msg').textContent = msg;
+  const n = document.getElementById('notif');
+  n.classList.add('show');
+  clearTimeout(notifTimer);
+  notifTimer = setTimeout(() => n.classList.remove('show'), 4000);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// BOOT
+// ─────────────────────────────────────────────────────────────────────────────
+pollMetrics(); pollLogs(); pollExperiments();
+setInterval(pollMetrics, POLL_MS);
+setInterval(pollLogs, POLL_MS);
+setInterval(pollExperiments, 5000);
+
+</script>
+</body>
+</html>
