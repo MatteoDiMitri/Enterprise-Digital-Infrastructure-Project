@@ -294,9 +294,3 @@ If you want CI to build images for multiple architectures, use `docker/setup-qem
 
 * Never commit `.env` or secrets to a public repository. Use GitHub Secrets for CI.
 * Use firewall rules / network isolation for production deployments.
-
----
-
-## License & Contact
-
-This repository is provided as-is for demo and lab use. For questions or help, open an issue in this repository.

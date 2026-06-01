@@ -21,7 +21,7 @@ Project layout
 - `load-generator/` — Locust scenarios, a simple HTML control panel and a
   FastAPI launcher (`launcher/`) that spawns headless Locust runs and streams
   logs back to the UI.
-- `server-py/` — A small Python dashboard backend, Prometheus config, and
+- `server-pi/` — A small Python dashboard backend, Prometheus config, and
   optional Docker Compose setup for running the demo stack.
 
 Goals and use-cases
@@ -64,10 +64,10 @@ Running the demo stack with Docker Compose
 -----------------------------------------
 (Recommended for a single-command reproducible run.)
 
-1. Change into the `server-py` directory:
+1. Change into the `server-pi` directory:
 
 ```bash
-cd server-py
+cd server-pi
 ```
 
 2. Build and start the stack:
@@ -158,30 +158,9 @@ Developer notes
   backend. The launcher attempts two endpoints for resilience: the standalone
   Python backend at host `:8881` and the legacy PHP `/api/scenario` shim.
 
-Translations and housekeeping
------------------------------
-- All code comments in the `load-generator` component are in English and aimed
-  at being clear to contributors and maintainers.
-
-Contributing
-------------
-Contributions are welcome. Suggested workflow:
-
-1. Fork the repository.
-2. Create a feature branch.
-3. Open a pull request with a clear description of changes and motivation.
-
 License
 -------
 This project is provided for educational purposes. Please check the
 `LICENSE` file in the repository root (if present) or contact the project
 maintainers for licensing details.
 
-
----
-If you want, I can now:
-- Run a quick static lint on the Python files.
-- Start the launcher locally and demonstrate starting a scenario.
-- Add small unit tests for the launcher runner logic.
-
-Tell me which you'd like next.
