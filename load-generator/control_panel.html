@@ -1,0 +1,740 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NEXUS — Locust Control Panel</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Instrument+Sans:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  /* ────────────────────────────────────────────────────────────────────
+     DESIGN TOKENS — kept identical to dashboard.html so the two pages
+     read as a single product, not two separate tools.
+     ──────────────────────────────────────────────────────────────────── */
+  :root {
+    --bg: #0e1117;
+    --surface: #161b25;
+    --surface2: #1e2535;
+    --border: rgba(255,255,255,0.07);
+    --text: #e2e8f4;
+    --muted: #6b7a99;
+    --green: #22c55e;
+    --red: #ef4444;
+    --amber: #f59e0b;
+    --blue: #3b82f6;
+    --teal: #14b8a6;
+    --purple: #a78bfa;
+    --accent: #c84b2f;
+    --mono: 'DM Mono', monospace;
+    --sans: 'Instrument Sans', system-ui, sans-serif;
+    --radius: 6px;
+  }
+
+  html, body { background: var(--bg); color: var(--text); font-family: var(--sans); min-height: 100vh; }
+
+  /* ── TOPBAR (matches dashboard.html exactly) ── */
+  .topbar {
+    height: 52px; border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 1.5rem; position: sticky; top: 0; z-index: 100;
+    background: var(--bg);
+  }
+  .topbar-left { display: flex; align-items: center; gap: 1.5rem; }
+  .logo { font-family: var(--mono); font-size: 15px; letter-spacing: 0.1em; color: var(--text); }
+  .logo span { color: var(--accent); }
+  .breadcrumb { font-family: var(--mono); font-size: 11px; color: var(--muted); }
+  .breadcrumb span { color: var(--text); }
+
+  .topbar-nav { display: flex; gap: 1.5rem; }
+  .topbar-nav a {
+    font-size: 12px; color: var(--muted); text-decoration: none;
+    letter-spacing: 0.04em; transition: color 0.15s;
+  }
+  .topbar-nav a:hover, .topbar-nav a.active { color: var(--text); }
+
+  .topbar-right { display: flex; align-items: center; gap: 1rem; }
+  .status-pill {
+    display: flex; align-items: center; gap: 6px;
+    background: rgba(107,122,153,0.1); border: 1px solid rgba(107,122,153,0.2);
+    border-radius: 999px; padding: 4px 10px;
+    font-family: var(--mono); font-size: 10px; color: var(--muted); letter-spacing: 0.06em;
+    transition: all 0.3s;
+  }
+  .status-pill.ok      { background: rgba(34,197,94,0.1);  border-color: rgba(34,197,94,0.2);  color: var(--green); }
+  .status-pill.running { background: rgba(59,130,246,0.1); border-color: rgba(59,130,246,0.2); color: var(--blue); }
+  .status-pill.warning { background: rgba(245,158,11,0.1); border-color: rgba(245,158,11,0.2); color: var(--amber); }
+  .status-pill.danger  { background: rgba(239,68,68,0.1);  border-color: rgba(239,68,68,0.2);  color: var(--red); }
+  .status-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; animation: pulse-dot 2s ease infinite; }
+  @keyframes pulse-dot { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
+
+  .time-display { font-family: var(--mono); font-size: 11px; color: var(--muted); }
+
+  /* ── MAIN ── */
+  main {
+    padding: 1.5rem; max-width: 1400px; margin: 0 auto;
+  }
+
+  /* ── SECTION HEADER ── */
+  .section-hd {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 1rem; padding-bottom: 0.75rem;
+    border-bottom: 1px solid var(--border);
+  }
+  .section-hd h2 {
+    font-size: 13px; font-weight: 500; letter-spacing: 0.04em;
+    color: var(--muted); text-transform: uppercase; font-family: var(--mono);
+  }
+  .section-hd .section-actions { display: flex; gap: 8px; align-items: center; }
+
+  /* ── PAGE HEADER (Mission-control banner) ── */
+  .page-header {
+    display: flex; align-items: center; justify-content: space-between;
+    background: linear-gradient(90deg, rgba(200,75,47,0.10), rgba(200,75,47,0.02));
+    border: 1px solid rgba(200,75,47,0.25);
+    border-radius: var(--radius);
+    padding: 1rem 1.25rem; margin-bottom: 1.5rem;
+  }
+  .page-header-text h1 {
+    font-family: var(--mono); font-size: 13px; font-weight: 500;
+    letter-spacing: 0.12em; text-transform: uppercase;
+    color: var(--accent); margin-bottom: 4px;
+  }
+  .page-header-text p { font-size: 12px; color: var(--muted); }
+  .page-header-stats {
+    display: flex; gap: 1.5rem;
+    font-family: var(--mono); font-size: 11px;
+  }
+  .stat-block { display: flex; flex-direction: column; gap: 2px; min-width: 110px; }
+  .stat-label { font-size: 9px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.1em; }
+  .stat-value { font-size: 14px; color: var(--text); }
+  .stat-value.muted { color: var(--muted); }
+
+  /* ── SCENARIO GRID + CARDS ── */
+  .scenario-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 12px;
+    margin-bottom: 1.5rem;
+  }
+  .scenario-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 1rem;
+    display: flex; flex-direction: column; gap: 10px;
+    cursor: pointer; transition: all 0.18s;
+    position: relative;
+  }
+  .scenario-card:hover {
+    border-color: rgba(255,255,255,0.18);
+    background: var(--surface2);
+    transform: translateY(-1px);
+  }
+  .scenario-card.selected {
+    border-color: var(--accent);
+    background: linear-gradient(180deg, rgba(200,75,47,0.08), var(--surface2));
+    box-shadow: 0 0 0 1px rgba(200,75,47,0.25);
+  }
+  .scenario-card.selected::before {
+    content: '✓ SELECTED';
+    position: absolute; top: 8px; right: 10px;
+    font-family: var(--mono); font-size: 9px; letter-spacing: 0.1em;
+    color: var(--accent);
+  }
+  .scenario-head { display: flex; align-items: center; gap: 10px; }
+  .scenario-icon { font-size: 1.3rem; }
+  .scenario-name { font-size: 14px; font-weight: 500; }
+  .scenario-tag {
+    font-family: var(--mono); font-size: 9px; letter-spacing: 0.08em;
+    text-transform: uppercase; padding: 2px 7px; border-radius: 999px;
+    background: rgba(107,122,153,0.15); color: var(--muted);
+  }
+  .scenario-tag.intense   { background: rgba(239,68,68,0.12);  color: var(--red); }
+  .scenario-tag.spike     { background: rgba(245,158,11,0.12); color: var(--amber); }
+  .scenario-tag.write     { background: rgba(167,139,250,0.12); color: var(--purple); }
+  .scenario-tag.resilient { background: rgba(20,184,166,0.12); color: var(--teal); }
+  .scenario-tag.steady    { background: rgba(34,197,94,0.12);  color: var(--green); }
+  .scenario-tag.max       { background: rgba(59,130,246,0.12); color: var(--blue); }
+  .scenario-desc {
+    font-size: 12px; color: var(--muted); line-height: 1.55;
+    flex: 1; min-height: 50px;
+  }
+  .scenario-defaults {
+    font-family: var(--mono); font-size: 10px; color: var(--muted);
+    padding-top: 8px; border-top: 1px dashed var(--border);
+  }
+  .scenario-defaults b { color: var(--text); font-weight: 500; }
+
+  /* ── CONTROLS PANEL (parameters + START/STOP) ── */
+  .controls-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 1.25rem;
+    margin-bottom: 1.5rem;
+  }
+  .controls-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr auto auto;
+    gap: 12px;
+    align-items: end;
+  }
+  .field { display: flex; flex-direction: column; gap: 6px; }
+  .field label {
+    font-family: var(--mono); font-size: 10px;
+    color: var(--muted); letter-spacing: 0.08em; text-transform: uppercase;
+  }
+  .field input {
+    background: var(--bg); border: 1px solid var(--border);
+    border-radius: 4px; padding: 9px 10px;
+    color: var(--text); font-family: var(--mono); font-size: 13px;
+    transition: border-color 0.15s;
+  }
+  .field input:focus {
+    outline: none; border-color: var(--blue);
+    box-shadow: 0 0 0 2px rgba(59,130,246,0.15);
+  }
+  .field input:disabled { opacity: 0.5; cursor: not-allowed; }
+  .field-hint { font-family: var(--mono); font-size: 9px; color: var(--muted); }
+
+  .btn-primary, .btn-stop {
+    border: none; padding: 10px 18px; border-radius: 4px;
+    font-family: var(--mono); font-size: 12px; font-weight: 500;
+    letter-spacing: 0.06em; text-transform: uppercase; cursor: pointer;
+    transition: all 0.15s; white-space: nowrap;
+  }
+  .btn-primary {
+    background: rgba(34,197,94,0.15); color: var(--green);
+    border: 1px solid rgba(34,197,94,0.3);
+  }
+  .btn-primary:hover:not(:disabled) {
+    background: rgba(34,197,94,0.25);
+    box-shadow: 0 0 12px rgba(34,197,94,0.2);
+  }
+  .btn-stop {
+    background: rgba(239,68,68,0.15); color: var(--red);
+    border: 1px solid rgba(239,68,68,0.3);
+  }
+  .btn-stop:hover:not(:disabled) {
+    background: rgba(239,68,68,0.25);
+    box-shadow: 0 0 12px rgba(239,68,68,0.2);
+  }
+  .btn-primary:disabled, .btn-stop:disabled { opacity: 0.35; cursor: not-allowed; }
+  .btn-primary.running { animation: pulse-btn 1.4s ease infinite; }
+  @keyframes pulse-btn { 0%,100% { opacity: 1; } 50% { opacity: 0.55; } }
+
+  /* Backend URL inline editor — useful during a uni demo when the
+     FastAPI launcher port changes. */
+  .api-config {
+    display: flex; align-items: center; gap: 8px;
+    font-family: var(--mono); font-size: 11px; color: var(--muted);
+    margin-top: 12px; padding-top: 12px;
+    border-top: 1px dashed var(--border);
+  }
+  .api-config input {
+    flex: 1; max-width: 320px;
+    background: var(--bg); border: 1px solid var(--border);
+    border-radius: 4px; padding: 5px 8px;
+    color: var(--text); font-family: var(--mono); font-size: 11px;
+  }
+
+  /* ── LOGS (terminal-style, borrows from dashboard) ── */
+  .logs-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius);
+  }
+  .logs-head {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 12px 16px; border-bottom: 1px solid var(--border);
+  }
+  .logs-head h3 {
+    font-family: var(--mono); font-size: 11px; font-weight: 500;
+    letter-spacing: 0.08em; color: var(--muted); text-transform: uppercase;
+  }
+  .logs-body {
+    max-height: 420px; overflow-y: auto;
+    padding: 8px 0; font-family: var(--mono); font-size: 11px;
+    background: #0a0d13;
+  }
+  .log-line {
+    display: grid; grid-template-columns: 80px 56px 1fr;
+    gap: 10px; padding: 4px 16px;
+    align-items: center;
+  }
+  .log-line:hover { background: rgba(255,255,255,0.02); }
+  .log-time { color: var(--muted); }
+  .log-level {
+    font-size: 9px; padding: 1px 6px; border-radius: 3px;
+    text-align: center; letter-spacing: 0.05em; text-transform: uppercase;
+  }
+  .log-level.info  { background: rgba(59,130,246,0.15); color: var(--blue); }
+  .log-level.warn  { background: rgba(245,158,11,0.15); color: var(--amber); }
+  .log-level.error { background: rgba(239,68,68,0.15);  color: var(--red); }
+  .log-level.ok    { background: rgba(34,197,94,0.15);  color: var(--green); }
+  .log-msg { color: var(--text); word-break: break-word; }
+  .log-empty { padding: 20px 16px; color: var(--muted); font-style: italic; }
+
+  /* ── NOTIFICATION TOAST (same as dashboard) ── */
+  .notif {
+    position: fixed; bottom: 20px; right: 20px;
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 12px 16px;
+    display: flex; align-items: center; gap: 10px;
+    min-width: 280px; max-width: 380px;
+    transform: translateX(420px); transition: transform 0.3s ease;
+    z-index: 1000; box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+  }
+  .notif.show { transform: translateX(0); }
+  .notif-icon { font-size: 1.2rem; }
+  .notif-body { flex: 1; }
+  .notif-title { font-size: 12px; font-weight: 500; margin-bottom: 2px; }
+  .notif-msg { font-size: 11px; color: var(--muted); }
+
+  /* ── RESPONSIVE ── */
+  @media (max-width: 800px) {
+    .controls-grid { grid-template-columns: 1fr 1fr; }
+    .page-header { flex-direction: column; align-items: flex-start; gap: 1rem; }
+    .page-header-stats { flex-wrap: wrap; }
+  }
+</style>
+</head>
+<body>
+
+<!-- TOPBAR -->
+<div class="topbar">
+  <div class="topbar-left">
+    <a href="/" style="text-decoration:none" class="logo">NEXUS<span>.</span></a>
+    <span class="breadcrumb">/ <span>locust orchestrator</span></span>
+    <nav class="topbar-nav">
+      <a href="/">Shop</a>
+      <a href="team.html">Team</a>
+      <a href="#" class="active">Control Panel</a>
+      <a href="dashboard.html">Dashboard</a>
+    </nav>
+  </div>
+  <div class="topbar-right">
+    <span class="api-status" id="api-status" style="font-family: var(--mono); font-size: 11px; color: var(--muted);">launcher: connecting…</span>
+    <div class="status-pill" id="run-pill"><div class="status-dot"></div><span id="run-text">IDLE</span></div>
+    <div class="time-display" id="clock">--:--:--</div>
+  </div>
+</div>
+
+<main>
+
+  <!-- MISSION-CONTROL HEADER -->
+  <div class="page-header">
+    <div class="page-header-text">
+      <h1>Locust Control Panel</h1>
+      <p>Select a scenario, tune the parameters, and launch a headless Locust run against the target web server.</p>
+    </div>
+    <div class="page-header-stats">
+      <div class="stat-block">
+        <span class="stat-label">Selected</span>
+        <span class="stat-value muted" id="hd-selected">— none —</span>
+      </div>
+      <div class="stat-block">
+        <span class="stat-label">Status</span>
+        <span class="stat-value" id="hd-status">Idle</span>
+      </div>
+      <div class="stat-block">
+        <span class="stat-label">Elapsed</span>
+        <span class="stat-value" id="hd-elapsed">00:00</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- SCENARIO GRID -->
+  <div class="section-hd">
+    <h2>Scenario library</h2>
+    <div class="section-actions">
+      <span style="font-family: var(--mono); font-size: 10px; color: var(--muted);">
+        Click a card to select. Defaults pre-fill the parameter panel below.
+      </span>
+    </div>
+  </div>
+
+  <div class="scenario-grid" id="scenario-grid">
+    <!-- Cards injected by JS so the scenario definitions live in one place. -->
+  </div>
+
+  <!-- PARAMETERS + CONTROLS -->
+  <div class="section-hd">
+    <h2>Run parameters</h2>
+  </div>
+  <div class="controls-card">
+    <div class="controls-grid">
+      <div class="field">
+        <label for="in-users">Users</label>
+        <input id="in-users" type="number" min="1" max="20000" value="100">
+        <span class="field-hint">total concurrent virtual users</span>
+      </div>
+      <div class="field">
+        <label for="in-spawn">Spawn rate</label>
+        <input id="in-spawn" type="number" min="1" max="2000" value="10">
+        <span class="field-hint">users / second</span>
+      </div>
+      <div class="field">
+        <label for="in-duration">Duration</label>
+        <input id="in-duration" type="number" min="10" max="3600" value="120">
+        <span class="field-hint">seconds</span>
+      </div>
+      <button class="btn-primary" id="btn-start" onclick="startTest()">▶ Start test</button>
+      <button class="btn-stop"    id="btn-stop"  onclick="stopTest()" disabled>■ Stop test</button>
+    </div>
+
+    <div class="api-config">
+      <span>Launcher endpoint:</span>
+      <input id="api-base" type="text" value="http://localhost:8000">
+      <span style="margin-left:8px;">Target host:</span>
+      <input id="target-host" type="text" value="http://100.81.88.32" placeholder="http://100.81.88.32">
+    </div>
+  </div>
+
+  <!-- EXECUTION LOGS -->
+  <div class="logs-card">
+    <div class="logs-head">
+      <h3>Execution log</h3>
+      <div class="section-actions">
+        <span style="font-family: var(--mono); font-size: 10px; color: var(--muted);" id="log-count">0 lines</span>
+        <button class="btn-stop" style="padding: 4px 10px; font-size: 10px;" onclick="clearLogs()">Clear</button>
+      </div>
+    </div>
+    <div class="logs-body" id="logs-body">
+      <div class="log-empty">No execution logs yet. Start a scenario to see Locust stdout/stderr stream here.</div>
+    </div>
+  </div>
+
+</main>
+
+<!-- TOAST -->
+<div class="notif" id="notif">
+  <span class="notif-icon" id="notif-icon">ℹ️</span>
+  <div class="notif-body">
+    <div class="notif-title" id="notif-title">—</div>
+    <div class="notif-msg" id="notif-msg">—</div>
+  </div>
+</div>
+
+<script>
+// ─────────────────────────────────────────────────────────────────────────────
+// SCENARIO DEFINITIONS
+// Single source of truth. Each entry matches a file in /scenarios/ on the
+// backend; the `key` is also the value POSTed to /start-test as `scenario`.
+// `defaults` populate the parameter inputs when the card is selected so a
+// reasonable load gets launched out of the box.
+// ─────────────────────────────────────────────────────────────────────────────
+const SCENARIOS = [
+  {
+    key: 'normal', icon: '📊', name: 'Normal Traffic',
+    tag: 'steady', tagText: 'baseline',
+    desc: 'Realistic user journeys with randomized think times (1–5s). Mix of browsing and ordering at moderate volume. Use this for baseline measurements.',
+    defaults: { users: 100, spawn_rate: 10, duration: 180 },
+  },
+  {
+    key: 'flash_crowd', icon: '🔥', name: 'Flash Crowd',
+    tag: 'spike', tagText: 'viral spike',
+    desc: 'Simulates a sudden viral event: ramps from 100 to 2000 users in a short window. Use to observe scaling behavior and latency spikes.',
+    defaults: { users: 2000, spawn_rate: 200, duration: 120 },
+  },
+  {
+    key: 'ddos', icon: '🌊', name: 'DDoS-like Burst',
+    tag: 'intense', tagText: 'flood',
+    desc: 'Aggressive GET request flooding with very small think time. Stresses the server/network layer. Controlled educational load test — no malicious payloads.',
+    defaults: { users: 1500, spawn_rate: 300, duration: 90 },
+  },
+  {
+    key: 'checkout_storm', icon: '🛒', name: 'Checkout Storm',
+    tag: 'write', tagText: 'write load',
+    desc: 'Many users placing orders simultaneously. Heavy POST /checkout.php traffic to stress write operations, transactions, and database load.',
+    defaults: { users: 500, spawn_rate: 50, duration: 120 },
+  },
+  {
+    key: 'degradation', icon: '🐌', name: 'Degradation',
+    tag: 'resilient', tagText: 'partial failure',
+    desc: 'Normal traffic mixed with intentionally slow requests, delayed responses, and random failure injection. Use to observe error rates and resilience.',
+    defaults: { users: 300, spawn_rate: 20, duration: 180 },
+  },
+  {
+    key: 'saturation', icon: '🚀', name: 'Saturation',
+    tag: 'max', tagText: 'max throughput',
+    desc: 'Near-zero think time, aggressive request rate. Used to identify the server\'s capacity limit — the point where latency or error rate breaks SLO.',
+    defaults: { users: 5000, spawn_rate: 500, duration: 120 },
+  },
+];
+
+// ─────────────────────────────────────────────────────────────────────────────
+// STATE
+// ─────────────────────────────────────────────────────────────────────────────
+let selectedScenario = null;     // currently highlighted card (string key)
+let isRunning        = false;    // mirrors backend /status
+let runStartedAt     = null;     // Date — when the current run began
+let lastSeenLogTs    = null;     // for incremental log fetch / dedupe
+let pollTimer        = null;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SCENARIO CARDS — render from SCENARIOS array
+// ─────────────────────────────────────────────────────────────────────────────
+function renderScenarioGrid() {
+  const grid = document.getElementById('scenario-grid');
+  grid.innerHTML = SCENARIOS.map(s => `
+    <div class="scenario-card" data-key="${s.key}" onclick="selectScenario('${s.key}')">
+      <div class="scenario-head">
+        <span class="scenario-icon">${s.icon}</span>
+        <span class="scenario-name">${s.name}</span>
+        <span class="scenario-tag ${s.tag}" style="margin-left:auto">${s.tagText}</span>
+      </div>
+      <div class="scenario-desc">${s.desc}</div>
+      <div class="scenario-defaults">
+        Defaults: <b>${s.defaults.users}</b> users ·
+        <b>${s.defaults.spawn_rate}</b>/s spawn ·
+        <b>${s.defaults.duration}s</b>
+      </div>
+    </div>
+  `).join('');
+}
+
+function selectScenario(key) {
+  // Don't allow scenario switching while a run is in progress — that would
+  // be confusing about what's actually executing on the backend.
+  if (isRunning) {
+    showNotif('⚠️', 'Run in progress', 'Stop the current test before selecting a different scenario.');
+    return;
+  }
+  selectedScenario = key;
+  const scn = SCENARIOS.find(s => s.key === key);
+
+  // Visual selection
+  document.querySelectorAll('.scenario-card').forEach(c => c.classList.remove('selected'));
+  document.querySelector(`.scenario-card[data-key="${key}"]`).classList.add('selected');
+
+  // Pre-fill parameter inputs with the scenario's defaults
+  document.getElementById('in-users').value    = scn.defaults.users;
+  document.getElementById('in-spawn').value    = scn.defaults.spawn_rate;
+  document.getElementById('in-duration').value = scn.defaults.duration;
+
+  // Update header
+  document.getElementById('hd-selected').textContent = scn.name;
+  document.getElementById('hd-selected').classList.remove('muted');
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// START / STOP — calls the Flask/FastAPI launcher
+// ─────────────────────────────────────────────────────────────────────────────
+function apiBase() {
+  // Trim trailing slash so we can concat /start-test safely.
+  return document.getElementById('api-base').value.replace(/\/+$/, '');
+}
+
+async function startTest() {
+  if (!selectedScenario) {
+    showNotif('⚠️', 'No scenario selected', 'Pick a scenario from the library first.');
+    return;
+  }
+  const payload = {
+    scenario:    selectedScenario,
+    users:       parseInt(document.getElementById('in-users').value, 10),
+    spawn_rate:  parseInt(document.getElementById('in-spawn').value, 10),
+    duration:    parseInt(document.getElementById('in-duration').value, 10),
+    host:        (document.getElementById('target-host').value || '').trim() || undefined,
+  };
+  // Basic client-side validation — backend should validate too.
+  if (!payload.users || !payload.spawn_rate || !payload.duration) {
+    showNotif('⚠️', 'Invalid parameters', 'All numeric fields are required.');
+    return;
+  }
+
+  try {
+    const r = await fetch(apiBase() + '/start-test', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const data = await r.json().catch(() => ({}));
+    if (!r.ok) {
+      showNotif('⚠️', 'Launch failed', data.error || `HTTP ${r.status}`);
+      return;
+    }
+    const scn = SCENARIOS.find(s => s.key === selectedScenario);
+    showNotif(scn.icon, `${scn.name} launched`, `${payload.users} users · ${payload.spawn_rate}/s spawn · ${payload.duration}s`);
+    setRunningUI(true);
+    runStartedAt = new Date();
+    // Kick off immediate poll so the UI doesn't wait 2s to update.
+    pollStatus();
+  } catch (e) {
+    showNotif('⚠️', 'Launcher unreachable', `Could not reach ${apiBase()}. Is the backend running?`);
+  }
+}
+
+async function stopTest() {
+  try {
+    const r = await fetch(apiBase() + '/stop-test', { method: 'POST' });
+    if (!r.ok) {
+      const data = await r.json().catch(() => ({}));
+      showNotif('⚠️', 'Stop failed', data.error || `HTTP ${r.status}`);
+      return;
+    }
+    showNotif('🛑', 'Stop requested', 'Sent SIGTERM to the Locust process.');
+    // The UI will flip back to idle on the next /status poll, but pre-empt
+    // the visual feedback so the user sees an immediate response.
+    setRunningUI(false);
+  } catch (e) {
+    showNotif('⚠️', 'Launcher unreachable', `Could not reach ${apiBase()}.`);
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// STATUS POLLING
+// Polls GET /status every 2s. Expected shape:
+//   { running: bool, scenario: string|null, started_at: ISO|null,
+//     users, spawn_rate, duration,
+//     logs: [{ ts: ISO, level: 'info'|'warn'|'error'|'ok', msg: string }] }
+// ─────────────────────────────────────────────────────────────────────────────
+async function pollStatus() {
+  try {
+    const r = await fetch(apiBase() + '/status');
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const s = await r.json();
+
+    document.getElementById('api-status').textContent = 'launcher: online';
+    document.getElementById('api-status').style.color = 'var(--green)';
+
+    // Sync running state from the backend (source of truth).
+    if (s.running && !isRunning) {
+      setRunningUI(true);
+      runStartedAt = s.started_at ? new Date(s.started_at) : new Date();
+      // If we reload mid-run, the selection card should reflect what's running.
+      if (s.scenario && SCENARIOS.find(x => x.key === s.scenario)) {
+        selectedScenario = s.scenario;
+        document.querySelectorAll('.scenario-card').forEach(c => c.classList.remove('selected'));
+        const card = document.querySelector(`.scenario-card[data-key="${s.scenario}"]`);
+        if (card) card.classList.add('selected');
+        document.getElementById('hd-selected').textContent = SCENARIOS.find(x => x.key === s.scenario).name;
+        document.getElementById('hd-selected').classList.remove('muted');
+      }
+    } else if (!s.running && isRunning) {
+      setRunningUI(false);
+    }
+
+    // Update elapsed time when running.
+    if (s.running && runStartedAt) {
+      const secs = Math.max(0, Math.floor((Date.now() - runStartedAt) / 1000));
+      document.getElementById('hd-elapsed').textContent =
+        `${String(Math.floor(secs/60)).padStart(2,'0')}:${String(secs%60).padStart(2,'0')}`;
+    }
+
+    // Append any new log lines (dedupe by timestamp).
+    if (Array.isArray(s.logs) && s.logs.length) {
+      const fresh = lastSeenLogTs
+        ? s.logs.filter(l => new Date(l.ts) > new Date(lastSeenLogTs))
+        : s.logs;
+      if (fresh.length) {
+        appendLogs(fresh);
+        lastSeenLogTs = s.logs[s.logs.length - 1].ts;
+      }
+    }
+  } catch (e) {
+    document.getElementById('api-status').textContent = 'launcher: offline';
+    document.getElementById('api-status').style.color = 'var(--red)';
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// UI HELPERS
+// ─────────────────────────────────────────────────────────────────────────────
+function setRunningUI(running) {
+  isRunning = running;
+  const pill = document.getElementById('run-pill');
+  const startBtn = document.getElementById('btn-start');
+  const stopBtn  = document.getElementById('btn-stop');
+
+  if (running) {
+    pill.className = 'status-pill running';
+    document.getElementById('run-text').textContent = 'RUNNING';
+    document.getElementById('hd-status').textContent = 'Running';
+    document.getElementById('hd-status').style.color = 'var(--blue)';
+    startBtn.disabled = true;
+    startBtn.classList.add('running');
+    startBtn.textContent = '⏳ Running…';
+    stopBtn.disabled = false;
+    // Lock inputs while running to avoid confusion about what's executing.
+    ['in-users','in-spawn','in-duration'].forEach(id => document.getElementById(id).disabled = true);
+  } else {
+    pill.className = 'status-pill';
+    document.getElementById('run-text').textContent = 'IDLE';
+    document.getElementById('hd-status').textContent = 'Idle';
+    document.getElementById('hd-status').style.color = 'var(--text)';
+    document.getElementById('hd-elapsed').textContent = '00:00';
+    startBtn.disabled = false;
+    startBtn.classList.remove('running');
+    startBtn.textContent = '▶ Start test';
+    stopBtn.disabled = true;
+    runStartedAt = null;
+    ['in-users','in-spawn','in-duration'].forEach(id => document.getElementById(id).disabled = false);
+  }
+}
+
+function appendLogs(entries) {
+  const body = document.getElementById('logs-body');
+  // Drop the "no logs yet" placeholder on first real entry.
+  if (body.querySelector('.log-empty')) body.innerHTML = '';
+
+  const html = entries.map(e => {
+    const t = new Date(e.ts).toLocaleTimeString('it-IT');
+    const lvl = (e.level || 'info').toLowerCase();
+    return `<div class="log-line">
+      <span class="log-time">${t}</span>
+      <span class="log-level ${lvl}">${lvl}</span>
+      <span class="log-msg">${escapeHtml(e.msg || '')}</span>
+    </div>`;
+  }).join('');
+  body.insertAdjacentHTML('beforeend', html);
+
+  // Auto-scroll to the newest line.
+  body.scrollTop = body.scrollHeight;
+
+  // Update line counter.
+  const count = body.querySelectorAll('.log-line').length;
+  document.getElementById('log-count').textContent = `${count} line${count===1?'':'s'}`;
+}
+
+function clearLogs() {
+  document.getElementById('logs-body').innerHTML =
+    '<div class="log-empty">Log buffer cleared. New entries will appear here.</div>';
+  document.getElementById('log-count').textContent = '0 lines';
+  lastSeenLogTs = null;
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c =>
+    ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;'})[c]);
+}
+
+// ── Notification toast ──
+let notifTimer;
+function showNotif(icon, title, msg) {
+  document.getElementById('notif-icon').textContent  = icon;
+  document.getElementById('notif-title').textContent = title;
+  document.getElementById('notif-msg').textContent   = msg;
+  const n = document.getElementById('notif');
+  n.classList.add('show');
+  clearTimeout(notifTimer);
+  notifTimer = setTimeout(() => n.classList.remove('show'), 4000);
+}
+
+// ── Topbar clock ──
+function tickClock() {
+  const d = new Date();
+  document.getElementById('clock').textContent =
+    `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}:${String(d.getSeconds()).padStart(2,'0')}`;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// BOOT
+// ─────────────────────────────────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', () => {
+  renderScenarioGrid();
+  tickClock(); setInterval(tickClock, 1000);
+  pollStatus();
+  pollTimer = setInterval(pollStatus, 2000);
+});
+</script>
+
+</body>
+</html>

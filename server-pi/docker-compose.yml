@@ -1,0 +1,49 @@
+services:
+  web:
+    build: ./web
+    ports:
+      - "8080:80"    # Site available on host port 8080 (container:80)
+    volumes:
+      - ./web/html:/var/www/html
+      - shared_tmp:/tmp
+    depends_on:
+      - db
+
+  db:
+    image: mariadb:11
+    restart: always
+    environment:
+      # Read passwords from the .env file via environment substitution
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: edi_project
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+    command: --max_connections=500
+    volumes:
+      - db_data:/var/lib/mysql
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+
+  prometheus:
+    image: prom/prometheus:v2.51.0
+    ports:
+      - "9091:9090"  # Prometheus available on host port 9091 (container:9090)
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prom_data:/prometheus
+
+  dashboard-backend:
+    image: python:3.11-slim
+    ports:
+      - "8881:8081"  # Dashboard backend available on host port 8881 (container:8081)
+    volumes:
+      - ./backend/dashboard-server.py:/app/dashboard-server.py
+      - shared_tmp:/tmp
+    working_dir: /app
+    command: ["python3", "dashboard-server.py"]
+    depends_on:
+      - prometheus
+
+volumes:
+  db_data:
+  prom_data:
+  shared_tmp:

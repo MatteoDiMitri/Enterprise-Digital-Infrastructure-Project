@@ -1,0 +1,2 @@
+- in _base.py fare in modo che il catalogo prodotti venga preso in automatico dal DB e convertito nel dizionario
+- in _base.py comprendere bene la "risposta" JSON del carrello del server ed eventualmente implementarla se manca

@@ -1,0 +1,55 @@
+# /var/www/html/.htaccess
+# Apache configuration for the demo web application
+# - auto-prepend PHP instrumentation for every request
+# - clean routing for API endpoints: /api/<name> -> /api/<name>.php
+#
+# Requirements:
+#  - enable mod_rewrite:    sudo a2enmod rewrite
+#  - enable mod_php:        sudo a2enmod php8.4
+#  - set AllowOverride All for /var/www/html in Apache config
+#
+# After changes restart Apache: sudo systemctl restart apache2
+
+
+# ------------------------------------------------------------------
+# 1) AUTO-PREPEND: load instrumentation on every PHP request
+# ------------------------------------------------------------------
+# `php_value` applies when PHP runs as an Apache module (mod_php).
+# For PHP-FPM move the equivalent to php.ini (auto_prepend_file).
+php_value auto_prepend_file "/var/www/html/api/_prepend.php"
+
+
+# ------------------------------------------------------------------
+# 2) CLEAN ROUTING
+# ------------------------------------------------------------------
+RewriteEngine On
+
+# Map /api/foo -> /api/foo.php for clean URLs. Allow existing files/dirs.
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule ^api/([a-z_]+)/?$ api/$1.php [L,QSA]
+
+
+# ------------------------------------------------------------------
+# 3) CORS (development convenience)
+# ------------------------------------------------------------------
+# The dashboard is normally served from the same origin. During local
+# development we allow permissive CORS so the UI can be opened from
+# file:// or served from a different host. Tighten this for production.
+<IfModule mod_headers.c>
+    <FilesMatch "^.*\.(json|php)$">
+        Header set Access-Control-Allow-Origin "*"
+        Header set Access-Control-Allow-Methods "GET, POST, OPTIONS"
+        Header set Access-Control-Allow-Headers "Content-Type"
+    </FilesMatch>
+</IfModule>
+
+
+# ------------------------------------------------------------------
+# 4) DENY direct access to internal helper files starting with '_'
+# ------------------------------------------------------------------
+# Files like _metrics_store.php, _pdo_statement.php and _prepend.php are
+# loaded by other PHP scripts and should not be reachable over HTTP.
+<FilesMatch "^_">
+    Require all denied
+</FilesMatch>

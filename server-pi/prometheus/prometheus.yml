@@ -1,0 +1,37 @@
+# prometheus.yml
+# =================
+# Prometheus configuration for the NEXUS demo (Docker).
+# Targets are the services Prometheus scrapes inside the Compose network.
+
+global:
+  scrape_interval: 5s          # default scrape frequency for all targets
+  scrape_timeout: 3s           # per-scrape HTTP timeout
+  evaluation_interval: 15s     # how often recording/alerting rules are evaluated
+  external_labels:
+    monitor: nexus-docker-pi   # label added to all samples (identifies this instance)
+
+scrape_configs:
+  # 1) Application metrics — PHP instrumentation exposed at /api/metrics
+  - job_name: 'nexus_php'
+    metrics_path: /api/metrics
+    scheme: http
+    static_configs:
+      - targets: ['web:80']    # container address for the web service
+        labels:
+          service: 'php-shop'
+          host:    'docker-web'
+
+  # 2) System metrics — kernel-level metrics exposed at /api/system_metrics
+  - job_name: 'nexus_system'
+    metrics_path: /api/system_metrics
+    scheme: http
+    static_configs:
+      - targets: ['web:80']    # same web container hosts the system endpoint
+        labels:
+          service: 'system'
+          host:    'docker-web'
+
+  # 3) Prometheus self-monitoring (Prometheus HTTP endpoint)
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['prometheus:9090'] # Prometheus container address

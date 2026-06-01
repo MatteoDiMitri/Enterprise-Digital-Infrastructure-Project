@@ -1,0 +1,19 @@
+# --- PI-Server Rules (Docker/Pi) ---
+.env
+db_data/
+prom_data/
+shared_tmp/
+
+# --- Load Generator Rules (Python/Locust) ---
+.venv/
+venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# --- OS Files ---
+.DS_Store
+Thumbs.db
+
+# --- vscode Configs ---
+.vscode
