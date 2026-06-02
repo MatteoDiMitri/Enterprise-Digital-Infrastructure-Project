@@ -32,7 +32,7 @@ Architecture and key files
 Ports and compose notes
 -----------------------
 - The web service exposes port 80 in the container. In this repository's
-  Docker Compose the host port is mapped to `8080:80`.
+  Docker Compose the host port is mapped to `80:80`.
 - The dashboard UI typically polls a small Python backend bound to
   container port `8081` (mapped to host `8881` in compose), but the
   dashboard can fall back to the Apache-hosted JSON shim.

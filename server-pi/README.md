@@ -69,7 +69,7 @@ sudo systemctl enable nexus-docker.service   # see systemd section below
 
 | Service | URL |
 | --- | --- |
-| Web (Apache/PHP) | `http://<pi-ip>:8080` |
+| Web (Apache/PHP) | `http://<pi-ip>:80` |
 | Dashboard backend API | `http://<pi-ip>:8881` |
 | Prometheus UI | `http://<pi-ip>:9091` |
 
@@ -137,7 +137,7 @@ docker compose ps
 
 ```
 
-Visit `http://<pi-ip>:8080` to see the web site and `http://<pi-ip>:9091` for Prometheus. The dashboard UI pages are in `web/html/` and the dashboard API is available at `http://<pi-ip>:8881`.
+Visit `http://<pi-ip>:80` to see the web site and `http://<pi-ip>:9091` for Prometheus. The dashboard UI pages are in `web/html/` and the dashboard API is available at `http://<pi-ip>:8881`.
 
 ---
 

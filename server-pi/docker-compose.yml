@@ -3,7 +3,7 @@ services:
   web:
     build: ./web
     ports:
-      - "80:80"    # (o 8080:80 se stai ancora testando)
+      - "80:80"
     # --- AGGIUNGI QUESTE DUE RIGHE ---
     env_file:
       - .env

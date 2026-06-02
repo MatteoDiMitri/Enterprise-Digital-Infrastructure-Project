@@ -46,7 +46,7 @@ Example new job:
 - job_name: 'my_service'
   metrics_path: /metrics
   static_configs:
-    - targets: ['myservice:8080']
+    - targets: ['myservice:80']
       labels:
         service: 'myservice'
 ```
@@ -68,8 +68,8 @@ docker compose logs -f prometheus
 - Verify target endpoints directly (example):
 
 ```bash
-curl http://localhost:8080/api/metrics
-curl http://localhost:8080/api/system_metrics
+curl http://localhost:80/api/metrics
+curl http://localhost:80/api/system_metrics
 ```
 
 - If a target is `DOWN` in the Prometheus UI, confirm the container name and port are reachable from the Prometheus container.
