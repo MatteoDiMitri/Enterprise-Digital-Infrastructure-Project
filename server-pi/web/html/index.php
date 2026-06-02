@@ -1,4 +1,3 @@
-$php
 <?php
 // 1. Include the database connection
 include 'db.php'; 
