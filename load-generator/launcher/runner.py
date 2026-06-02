@@ -32,11 +32,9 @@ from __future__ import annotations
 import os
 import re
 import shlex
-import signal
 import subprocess
 import sys
 import threading
-import time
 from collections import deque
 from datetime import datetime, timezone
 from pathlib import Path

@@ -1,8 +1,13 @@
 services:
+
   web:
     build: ./web
     ports:
-      - "8080:80"    # Site available on host port 8080 (container:80)
+      - "80:80"    # (o 8080:80 se stai ancora testando)
+    # --- AGGIUNGI QUESTE DUE RIGHE ---
+    env_file:
+      - .env
+    # ---------------------------------
     volumes:
       - ./web/html:/var/www/html
       - shared_tmp:/tmp
