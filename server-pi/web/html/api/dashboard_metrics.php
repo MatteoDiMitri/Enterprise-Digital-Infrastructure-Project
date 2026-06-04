@@ -36,7 +36,10 @@ const RANGE_WINDOW_SEC  = 90;       // seconds of history for charts
 // With step=2s we get exactly 45 points (90/2). The dashboard charts
 // render 45 real-data points left-to-right without left padding.
 const RANGE_STEP_SEC    = 2;
-const RATE_WINDOW       = '1m';     // finestra per rate(): 1 minuto
+const RATE_WINDOW       = '30s';    // finestra per rate(): 30s. Con scrape a
+                                    // 2s sono ~15 campioni/punto: percentili e
+                                    // rps reattivi e niente coda di 1 minuto
+                                    // ("DRAIN") dopo la fine di uno scenario.
 const SCENARIO_FILE     = '/tmp/nexus_active_scenario.json';
 
 // SLO thresholds (tarati per match con dashboard.html)
@@ -222,11 +225,13 @@ if (file_exists(SCENARIO_FILE)) {
     }
 }
 
-// SLO compliance combinato
+// SLO compliance combinato. La soglia CPU è allineata al semaforo della
+// dashboard (rosso ≥70): superare il 70% porta lo SLO ad "at_risk", il 90%
+// a "violation". Così "CPU rossa" e "SLO a rischio" raccontano la stessa storia.
 $slo = 'ok';
-if ($p99Ms > SLO_P99_MS_TARGET || $errRate > 10 || $cpu > 95) {
+if ($p99Ms > SLO_P99_MS_TARGET || $errRate > 10 || $cpu > 90) {
     $slo = 'violation';
-} elseif ($p99Ms > SLO_P99_MS_TARGET / 2 || $errRate > SLO_ERROR_RATE_PCT || $cpu > 80) {
+} elseif ($p99Ms > SLO_P99_MS_TARGET / 2 || $errRate > SLO_ERROR_RATE_PCT || $cpu > 70) {
     $slo = 'at_risk';
 }
 

@@ -55,7 +55,9 @@ SCENARIO_FILE = '/tmp/nexus_active_scenario.json'
 # Query window and sampling
 RANGE_WINDOW_SEC = 90
 RANGE_STEP_SEC = 2          # Prometheus requires integer step values (seconds)
-RATE_WINDOW = '1m'
+RATE_WINDOW = '30s'         # 30s window: with a 2s scrape that's ~15 samples
+                            # per point — responsive percentiles/rps and no
+                            # 1-minute "DRAIN" tail after a scenario ends.
 HISTORY_POINTS = RANGE_WINDOW_SEC // RANGE_STEP_SEC   # default: 45
 
 ALLOWED_SCENARIOS = {
@@ -210,10 +212,11 @@ def collect_dashboard_metrics() -> dict:
     scenario_data = read_scenario_file()
     scenario_name = scenario_data.get('scenario', 'idle')
 
-    # SLO compliance heuristic
-    if p99 > 1000 or err_rate > 10 or cpu > 95:
+    # SLO compliance heuristic. CPU threshold aligned to the dashboard's
+    # traffic light (red ≥70): >70% → at_risk, >90% → violation.
+    if p99 > 1000 or err_rate > 10 or cpu > 90:
         slo_status = 'violation'
-    elif p99 > 500 or err_rate > 2 or cpu > 80:
+    elif p99 > 500 or err_rate > 2 or cpu > 70:
         slo_status = 'at_risk'
     else:
         slo_status = 'ok'

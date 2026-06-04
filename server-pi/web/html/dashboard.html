@@ -758,7 +758,12 @@ function renderMetrics(m) {
   document.getElementById('kpi-svcs-d').textContent = hh < tt ? `${tt - hh} service${tt - hh === 1 ? '' : 's'} down/degraded` : 'all healthy';
 
   document.getElementById('kpi-cpu').innerHTML   = `${k.cpu ?? '—'} <span class="kpi-unit">%</span>`;
-  document.getElementById('kpi-cpu').style.color = colorFor(k.cpu || 0, 70, 90);
+  // CPU traffic light: green 0–40, amber 41–69, red ≥70. We deliberately go
+  // red well before the CPU is maxed out — the Raspberry should never be
+  // pushed needlessly, so 70% is treated as "hot", not "fine".
+  document.getElementById('kpi-cpu').style.color = colorFor(k.cpu || 0, 40, 69);
+  document.getElementById('kpi-card-cpu').classList.toggle('warning', (k.cpu || 0) > 40 && (k.cpu || 0) <= 69);
+  document.getElementById('kpi-card-cpu').classList.toggle('danger',  (k.cpu || 0) > 69);
   document.getElementById('kpi-cpu-d').textContent = `${100 - (k.cpu || 0)}% headroom`;
 
   document.getElementById('kpi-queue').textContent  = k.queue_depth ?? '—';

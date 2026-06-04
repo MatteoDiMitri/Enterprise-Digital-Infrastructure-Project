@@ -31,6 +31,18 @@ RewriteRule ^api/([a-z_]+)/?$ api/$1.php [L,QSA]
 
 
 # ------------------------------------------------------------------
+# 2b) 404s THROUGH PHP (so error traffic is observable)
+# ------------------------------------------------------------------
+# Apache's built-in 404 page never invokes PHP, so 4xx requests (e.g. the
+# Degradation scenario's GET /this-page-does-not-exist) were invisible to
+# the metrics pipeline: no entry in the endpoint table, error rate stuck at
+# 0%, donut always green. Routing 404s to a PHP handler means the
+# auto-prepend instrumentation records them (endpoint = original URI,
+# status = 404) and the dashboard lights up correctly.
+ErrorDocument 404 /404.php
+
+
+# ------------------------------------------------------------------
 # 3) CORS (development convenience)
 # ------------------------------------------------------------------
 # The dashboard is normally served from the same origin. During local

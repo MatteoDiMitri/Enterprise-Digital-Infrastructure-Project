@@ -4,8 +4,11 @@
 # Targets are the services Prometheus scrapes inside the Compose network.
 
 global:
-  scrape_interval: 5s          # default scrape frequency for all targets
-  scrape_timeout: 3s           # per-scrape HTTP timeout
+  scrape_interval: 2s          # match the dashboard chart step (2s) so the
+                               # range queries return one real sample per point
+                               # instead of a staircase. On a Pi this is two
+                               # tiny text endpoints; the extra load is minimal.
+  scrape_timeout: 1s           # per-scrape HTTP timeout (must be < interval)
   evaluation_interval: 15s     # how often recording/alerting rules are evaluated
   external_labels:
     monitor: nexus-docker-pi   # label added to all samples (identifies this instance)

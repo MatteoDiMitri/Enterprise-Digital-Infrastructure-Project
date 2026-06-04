@@ -17,3 +17,10 @@ RUN docker-php-ext-install pdo pdo_mysql \
 # Ensure Apache's runtime user owns the webroot so PHP/Apache can write
 # (uploads, temp files, and some demo scripts expect write access).
 RUN chown -R www-data:www-data /var/www/html
+
+# ── OPTIONAL: Apache worker-pool tuning (caps throughput, protects the Pi) ──
+# Uncomment to apply server-pi/web/apache/nexus.conf. Read the trade-off
+# notes in that file first — capping workers also caps the dashboard's
+# "queue depth" (it can't exceed the number of busy workers).
+# COPY apache/nexus.conf /etc/apache2/conf-available/nexus.conf
+# RUN a2enconf nexus
