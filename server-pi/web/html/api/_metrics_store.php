@@ -30,8 +30,13 @@ declare(strict_types=1);
 const NEXUS_METRICS_FILE = '/tmp/nexus_metrics.json';
 
 /** HTTP latency histogram buckets in seconds.
- *  Cover ~5ms → 5s which is relevant for a small shop. */
-const NEXUS_HTTP_BUCKETS = [0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0];
+ *  Cover ~5ms → 5s. Extra resolution between 100ms and 1.5s because that
+ *  is exactly the band our scenarios live in: with coarse buckets a few
+ *  slow requests made histogram_quantile leap (e.g. 500ms straight to
+ *  1000+ms p99). Finer steps there make the percentile curve smooth and
+ *  faithful instead of jumpy. NOTE: changing buckets starts new Prometheus
+ *  series — do a fresh run / restart Prometheus after editing. */
+const NEXUS_HTTP_BUCKETS = [0.005, 0.01, 0.025, 0.05, 0.1, 0.15, 0.2, 0.3, 0.4, 0.5, 0.75, 1.0, 1.5, 2.5, 5.0];
 
 /** DB query latency histogram buckets. Narrower since queries are
  * expected to be fast; when DB degrades they spike. */
