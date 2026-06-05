@@ -13,10 +13,11 @@ Why a single base class?
 
 Simulated journey
 -----------------
-GET  /                          → home page
-GET  /index.php                 → product list / browse
-GET  /index.php?product_id=N    → product detail
-POST /checkout.php              → place an order (JSON cart payload)
+GET  /                              → home page
+GET  /api/products.php              → dynamic catalog fetch (once per class)
+GET  /index.php                     → product list / browse
+GET  /index.php?product_id=N        → product detail
+POST /checkout.php                  → place an order (JSON cart payload)
 
 Extending
 ---------
@@ -30,36 +31,6 @@ To add a new scenario:
 
 import random
 from locust import HttpUser, between
-
-
-# -----------------------------------------------------------------------------
-# Simulated product catalog. Each (id, price) pair matches what the existing
-# checkout.php endpoint expects in the cart payload. Prices stay client-side
-# for the demo; in production checkout.php recomputes them server-side anyway
-# (see the original PHP — totals are recalculated to never trust the client).
-# -----------------------------------------------------------------------------
-PRODUCT_CATALOG = [
-    {"id": 1, "price": 19.99},
-    {"id": 2, "price": 29.50},
-    {"id": 3, "price": 49.00},
-    {"id": 4, "price":  9.90},
-    {"id": 5, "price": 14.50},
-    {"id": 6, "price": 79.00},
-    {"id": 7, "price": 124.99},
-    {"id": 8, "price":  5.00},
-]
-
-
-def random_cart(min_items: int = 1, max_items: int = 4) -> dict:
-    """Build a plausible cart payload for POST /checkout.php."""
-    chosen = random.sample(PRODUCT_CATALOG, k=random.randint(min_items, max_items))
-    return {
-        "items": [
-            {"id": p["id"], "qty": random.randint(1, 3), "price": p["price"]}
-            for p in chosen
-        ]
-    }
-
 
 # =============================================================================
 # Base user class
@@ -90,12 +61,46 @@ class ShopUser(HttpUser):
     abstract = True              # Locust won't run this class directly
     wait_time = between(1, 5)
     SLOW_THRESHOLD_MS = None     # disabled by default
+    
+    # Class-level variable shared across ALL instances.
+    # We fetch this once per test run, not once per user, to save DB load.
+    product_catalog = []
 
     # ---- Lifecycle --------------------------------------------------------
 
     def on_start(self):
-        """Every simulated user lands on the home page first."""
+        """Every simulated user lands on the home page first and checks the catalog."""
         self.client.get("/", name="GET /")
+        
+        # If the catalog is empty (first user spawning), fetch it from the DB via API
+        if not type(self).product_catalog:
+            with self.client.get("/api/products.php", name="Fetch Catalog API", catch_response=True) as response:
+                if response.status_code == 200:
+                    try:
+                        type(self).product_catalog = response.json()
+                    except ValueError:
+                        response.failure("Catalog API did not return valid JSON")
+                else:
+                    response.failure(f"Failed to fetch catalog (HTTP {response.status_code})")
+
+    # ---- Cart Helper ------------------------------------------------------
+
+    def _random_cart(self, min_items: int = 1, max_items: int = 4) -> dict:
+        """Build a plausible cart payload for POST /checkout.php."""
+        catalog = type(self).product_catalog
+        if not catalog:
+            return {"items": []}
+            
+        # Safeguard: don't try to sample more items than exist in the database
+        k = min(random.randint(min_items, max_items), len(catalog))
+        chosen = random.sample(catalog, k=k)
+        
+        return {
+            "items": [
+                {"id": p["id"], "qty": random.randint(1, 3), "price": p["price"]}
+                for p in chosen
+            ]
+        }
 
     # ---- Journey steps (referenced by `tasks` dict below) -----------------
 
@@ -110,7 +115,11 @@ class ShopUser(HttpUser):
 
     def task_detail(self):
         """Open a single product page."""
-        prod = random.choice(PRODUCT_CATALOG)
+        catalog = type(self).product_catalog
+        if not catalog:
+            return # Skip if catalog failed to load
+            
+        prod = random.choice(catalog)
         with self.client.get(
             f"/index.php?product_id={prod['id']}",
             name="GET /index.php?product_id=[id]",   # template name keeps stats grouped
@@ -120,7 +129,11 @@ class ShopUser(HttpUser):
 
     def task_order(self):
         """Lowest-frequency action: post a cart to /checkout.php."""
-        payload = random_cart()
+        payload = self._random_cart()
+        
+        if not payload["items"]:
+            return # Skip if no items available
+            
         with self.client.post(
             "/checkout.php",
             json=payload,
