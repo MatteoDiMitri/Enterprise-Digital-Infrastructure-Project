@@ -2,37 +2,94 @@
 scenarios/ddos.py
 =================
 Controlled educational flood. NOT a real attack — this is a load-test
-scenario that targets the network/server layer of an instance you own.
+scenario that targets an instance you own.
 
-What it is NOT
---------------
-- No malicious payloads.
-- No traffic amplification.
-- No source spoofing.
-- No persistent connection abuse.
+What changed vs the original
+----------------------------
+1) A LoadTestShape now drives the load so the run has a clear, readable
+   profile on the dashboard:
 
-It is just many concurrent virtual users sending plain GETs as fast as
-their think time allows. The point is to measure how the front layer
-(nginx, PHP-FPM, OS socket buffers) holds up under request-rate pressure.
+       warm-up  → BURST → plateau (saturation) → drop (recovery) → end
+
+   This gives you, in a single run, the "before / during / after"
+   needed to show: saturation, SLO violation, and — crucially — the
+   RECOVERY phase (objective #9). The launcher's -u / -r are ignored
+   while a shape is active; only -t (duration) still matters, so set
+   the duration in the control panel to >= the shape total (85s here).
+
+2) Near-zero think time keeps request-rate pressure high.
+
+3) catch_response marks 5xx / connection failures as Locust failures,
+   so the *load-generator's own* report is honest too (not just the
+   server dashboard). Useful to cross-check detectability (objective #8).
+
+Note on 5xx visibility
+----------------------
+mpm_prefork does NOT emit 503 on worker exhaustion — it queues. To make
+the server actually return 5xx (and light up error rate / the donut /
+the error taxonomy), enable the load-shedding gate in api/_prepend.php
+by setting NEXUS_MAX_INFLIGHT on the web container. Without that gate
+this scenario shows latency + CPU saturation but error rate stays ~0%.
 
 Run this only against infrastructure you have permission to test.
 """
 
-from locust import HttpUser, between, task
+from locust import HttpUser, LoadTestShape, between, task
 
 
 class DDoSUser(HttpUser):
     """
-    Minimal user: no journey, just hammer the home page.
-
-    - Tiny think time (50–200ms) keeps the request rate per user high
-      without going completely to zero (zero think time is what
-      `saturation` is for).
-    - Inherits HttpUser directly (NOT ShopUser) so we don't accidentally
-      send POST checkouts during the flood.
+    Minimal user: no shop journey, just hammer the home page as fast as
+    the (tiny) think time allows. Inherits HttpUser directly (NOT
+    ShopUser) so we never send POST checkouts during the flood.
     """
-    wait_time = between(0.05, 0.2)
+    # Very small think time: aggressive, but not a literal zero-wait
+    # busy loop (that's what `saturation` is for).
+    wait_time = between(0.01, 0.05)
 
     @task
     def flood_home(self):
-        self.client.get("/", name="GET / (flood)")
+        with self.client.get(
+            "/",
+            name="GET / (flood)",
+            catch_response=True,
+        ) as r:
+            # Mark overload responses as failures so Locust's own stats
+            # reflect the attack. 503 = the server's load-shedding gate
+            # (see _prepend.php); 5xx in general = server in trouble.
+            if r.status_code >= 500:
+                r.failure(f"server overloaded: HTTP {r.status_code}")
+            elif r.status_code == 429:
+                r.failure("rate limited: HTTP 429")
+            # 2xx/3xx: leave as success (default).
+
+
+class DDoSShape(LoadTestShape):
+    """
+    Five-phase profile (each tuple: cumulative_end_s, target_users, spawn_rate):
+
+        0–8s   : warm-up at 50 users          → baseline reference on the charts
+        8–18s  : BURST to 1200 users @ 300/s  → the attack ramp
+        18–60s : hold 1200 users              → saturation / SLO violation window
+        60–85s : drop to 15 users @ 100/s     → RECOVERY observation window
+        >85s   : end the test
+
+    Total ~85s, so the control panel's default 90s duration completes the
+    whole profile (including recovery). Bump users to 1500–2000 if your
+    client machine and target can take more; lower to 600–800 if the
+    *load generator itself* becomes the bottleneck (watch the Locust host's
+    own CPU — if it's pegged, you're measuring the client, not the server).
+    """
+    stages = [
+        (8,   50,   50),
+        (18,  1200, 300),
+        (60,  1200, 1),
+        (85,  15,   100),
+    ]
+
+    def tick(self):
+        run_time = self.get_run_time()
+        for end_time, users, spawn_rate in self.stages:
+            if run_time < end_time:
+                return (users, spawn_rate)
+        return None  # signals "test complete"

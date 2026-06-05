@@ -44,19 +44,42 @@ class FlashCrowdUser(ShopUser):
 
 class FlashCrowdShape(LoadTestShape):
     """
-    Three-stage ramp:
-      0–10s  : warm-up at 100 users
-      10–25s : burst to 2000 users at 200 users/s spawn rate
-      25–90s : hold at 2000 users
-      >90s   : end the test
+    Steep spike held at the Pi's SERVE-ABLE edge (test phase):
+      0–3s  : short baseline at 60 users
+      3–5s  : near-vertical wall to 350 users at 200/s
+      5–90s : hold at 350 — CPU pinned red, ~120-150 rps SUSTAINED, queue building
+      >90s  : end the test
+
+    Why 350 and not thousands: the dashboard measures *served* PHP work. On a
+    4-core Pi the practical ceiling is ~120-150 rps served and ~150 requests
+    in-flight (Apache mpm_prefork MaxRequestWorkers default). Pushing the user
+    count far higher only helps if the LOAD BOX can actually hold that many open
+    sockets. On Linux/macOS the cap is `ulimit -n` (default 1024 / 256). On
+    WINDOWS there is no ulimit: the equivalent walls are ephemeral-port /
+    TIME_WAIT exhaustion (WinError 10048 / 10055) and single-process gevent
+    limits. Past the client's ceiling it chokes, stops sending, and served
+    throughput COLLAPSES while the Pi sits near-idle (the 1200-user run gave
+    11 rps / 0% CPU — that was the client, not the Pi). Practical fix: you do
+    NOT need thousands. 350-450 users already maxes a 4-core Pi and is well
+    within a single Windows Locust process. For genuinely high counts on
+    Windows, run Locust from WSL2 (where ulimit applies) or distributed
+    (master + workers) so connections spread across processes.
 
     Each tuple: (cumulative_end_time_seconds, target_users, spawn_rate)
     """
     stages = [
-        (10, 100,  50),
-        (25, 2000, 200),
-        (90, 2000, 1),
+        (5,  60,   30),     # 0–5s : baseline, connections warm up gently
+        (20, 350,  40),     # 5–20s: ramp to 350 at 40/s (fast but no cold-connect storm)
+        (90, 350,  1),      # 20–90s: HOLD at 350 — read the dashboard HERE
     ]
+    # --- Alternatives (swap the block above) -------------------------------
+    # Push the edge (expect the first real 5xx + queue spikes; ~450 is the
+    # collapse threshold on a single Pi — do NOT go past ~500 or throughput
+    # implodes like the 1200 run did):
+    #   (3, 80, 80), (5, 450, 220), (90, 450, 1)
+    #
+    # Classic viral PULSE (spike, crush, recover — very legible story):
+    #   (5, 50, 25), (8, 380, 170), (40, 380, 1), (65, 70, 15), (90, 70, 1)
 
     def tick(self):
         run_time = self.get_run_time()
