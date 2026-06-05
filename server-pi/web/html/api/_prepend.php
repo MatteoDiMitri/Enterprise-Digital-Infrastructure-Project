@@ -58,7 +58,7 @@ if (!$_nexus_skip) {
     // Window: a fixed 1-second counter with a 2s TTL — self-healing, so you
     // do NOT need to restart anything between runs.
     $_nexus_rl = (int) (getenv('NEXUS_RATELIMIT_RPS') ?: 0);
-    if ($_nexus_rl > 0 && _nexus_active_scenario() === 'ddos') {
+    if ($_nexus_rl > 0) {
         $sec  = (int) floor(microtime(true));
         $hits = _nexus_rl_hit($sec);
         if ($hits > $_nexus_rl) {

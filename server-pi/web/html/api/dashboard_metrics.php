@@ -348,7 +348,7 @@ function nexus_collect_services(int $p99Ms, float $errRate): array
     // ma nessuna query DB osservata. Tutto il resto è 'healthy'.
     //
     // Inoltre: se ci sono query ma sono lente (p95 > 500ms), è warning.
-    if ($dbQueries > 0 && $dbP95Ms > 500) {
+    if ($dbQueries > 0 && $dbP95Ms > 50) {
         $mariaStatus = 'warning';      // DB sotto stress
     } else {
         $mariaStatus = 'healthy';      // tutto OK (o DB semplicemente non usato)

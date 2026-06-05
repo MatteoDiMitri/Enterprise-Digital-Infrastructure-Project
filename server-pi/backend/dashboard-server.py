@@ -257,7 +257,7 @@ def collect_services(p99: float, err_rate: float, cpu: float) -> dict:
         php_status = 'healthy'
 
     # MariaDB: warning only if queries are observed AND slow
-    if db_queries > 0 and db_p95 > 500:
+    if db_queries > 0 and db_p95 > 50:
         maria_status = 'warning'
     else:
         maria_status = 'healthy'
