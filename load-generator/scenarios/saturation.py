@@ -27,10 +27,22 @@ class SaturationUser(ShopUser):
     # zero-wait busy loop on the simulated clients themselves.
     wait_time = between(0, 0.05)
 
+    def task_broken_link(self):
+        """
+        Hit a path we expect to 404. Low weight: simulates a small
+        fraction of users hitting stale URLs or deprecated endpoints.
+        """
+        self.client.get(
+            "/this-page-does-not-exist",
+            name="GET /this-page-does-not-exist (expected 404)",
+        )
+
     # Read-heavy: many GETs, fewer writes. To stress the write path
     # explicitly, use the checkout_storm scenario instead.
     tasks = {
         ShopUser.task_browse: 8,
         ShopUser.task_detail: 4,
         ShopUser.task_order:  1,
+        task_broken_link:      3,
     }
+    
