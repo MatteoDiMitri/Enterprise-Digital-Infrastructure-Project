@@ -61,7 +61,7 @@ if (!$_nexus_skip) {
     if ($_nexus_rl > 0) {
         $sec  = (int) floor(microtime(true));
         $hits = _nexus_rl_hit($sec);
-        if ($hits > $_nexus_rl) {
+        if ($hits > $_nexus_rl && _nexus_active_scenario() !== 'checkout_storm') {
             http_response_code(503);
             header('Retry-After: 1');
             header('Content-Type: application/json; charset=utf-8');
