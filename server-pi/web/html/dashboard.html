@@ -933,11 +933,18 @@ function applyFilters() {
 
 function renderLogs(entries) {
   const container = document.getElementById('logs-body');
+  
+  // Controlliamo se l'utente è già in fondo alla finestra (scrolling intelligente)
+  // Questo evita che la pagina ti "strappi via" la visuale se stai leggendo un log vecchio
+  const isScrolledToBottom = container.scrollHeight - container.clientHeight <= container.scrollTop + 50;
+
   if (!entries.length) {
     container.innerHTML = '<div class="log-line"><span class="log-msg" style="color:var(--muted);">No logs matching this filter.</span></div>';
     return;
   }
+  
   container.innerHTML = entries.map(e => {
+    // Il timestamp ora viene dal backend, lo formattiamo bene
     const t = new Date(e.timestamp).toLocaleTimeString('it-IT');
     const level = (e.level || 'INFO').toUpperCase();
     return `<div class="log-line">
@@ -947,6 +954,11 @@ function renderLogs(entries) {
       <span class="log-msg">${e.message}</span>
     </div>`;
   }).join('');
+
+  // Se l'utente era in fondo, fai scorrere automaticamente i nuovi messaggi
+  if (isScrolledToBottom) {
+    container.scrollTop = container.scrollHeight;
+  }
 }
 
 function refreshAll() {

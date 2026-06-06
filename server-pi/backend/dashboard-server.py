@@ -489,21 +489,31 @@ class NexusHandler(http.server.BaseHTTPRequestHandler):
 
             for service_name in containers_to_monitor:
                 try:
-                    # Find the running container matching the service name
+                    # Find the running container
                     container_list = docker_client.containers.list(filters={"name": service_name})
                     if not container_list:
                         continue
                         
                     container = container_list[0]
-                    # Fetch the last 30 log lines
-                    raw_logs = container.logs(tail=30, stdout=True, stderr=True).decode('utf-8', errors='replace')
+                    # 1. AGGIUNTO: timestamps=True per ottenere l'ora nativa di Docker
+                    raw_logs = container.logs(tail=30, stdout=True, stderr=True, timestamps=True).decode('utf-8', errors='replace')
                     
                     for line in raw_logs.splitlines():
                         if not line.strip():
                             continue
                         
-                        # Basic parser to assign CSS severity levels
-                        line_upper = line.upper()
+                        # 2. Separiamo il timestamp nativo di Docker dal messaggio
+                        parts = line.split(" ", 1)
+                        if len(parts) == 2 and ("T" in parts[0] or "Z" in parts[0]):
+                            log_timestamp = parts[0]
+                            log_text = parts[1]
+                        else:
+                            # Fallback se la riga è strana
+                            log_timestamp = datetime.datetime.now(datetime.timezone.utc).isoformat()
+                            log_text = line
+                        
+                        # 3. Usiamo log_text invece di line per la nostra logica
+                        line_upper = log_text.upper()
                         detected_level = "INFO"
                         if "ERROR" in line_upper or "FATAL" in line_upper:
                             detected_level = "ERROR"
@@ -512,16 +522,14 @@ class NexusHandler(http.server.BaseHTTPRequestHandler):
                         elif "CRIT" in line_upper:
                             detected_level = "CRITICAL"
 
-                        # Apply frontend filter
                         if level != "ALL" and detected_level != level:
                             continue
 
-                        # Format the log line for the frontend table
                         logs_output.append({
-                            "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+                            "timestamp": log_timestamp,
                             "level": detected_level,
                             "service": service_name,
-                            "message": line[:200] + ("..." if len(line) > 200 else "")
+                            "message": log_text[:200] + ("..." if len(log_text) > 200 else "")
                         })
                 except Exception as e:
                     print(f"[ERROR] failed reading logs for {service_name}: {e}")
