@@ -13,7 +13,7 @@ services:
       # scenario ddos: oltre questo numero di richieste/secondo il server
       # risponde 503, così error_rate supera il 2% e il donut mostra i 5xx.
       # 0 o assente = gate spento. Parti da 100; abbassa a 50 per piu' errori.
-      - NEXUS_RATELIMIT_RPS=150
+      - NEXUS_RATELIMIT_RPS=100
     volumes:
       - ./web/html:/var/www/html
       - shared_tmp:/tmp
