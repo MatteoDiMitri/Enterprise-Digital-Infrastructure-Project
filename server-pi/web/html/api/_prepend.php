@@ -61,7 +61,7 @@ if (!$_nexus_skip) {
     if ($_nexus_rl > 0) {
         $sec  = (int) floor(microtime(true));
         $hits = _nexus_rl_hit($sec);
-        if ($hits > $_nexus_rl && _nexus_active_scenario() !== 'checkout_storm') {
+        if ($hits > $_nexus_rl) {
             http_response_code(503);
             header('Retry-After: 1');
             header('Content-Type: application/json; charset=utf-8');
@@ -80,6 +80,30 @@ if (!$_nexus_skip) {
                 'status'   => '503',
                 'endpoint' => $endpoint,
             ]);
+
+            // AVAILABILITY FIX: also record the shed request in the latency
+            // histogram. The dashboard computes
+            //     availability = (within_slo - errors) / total
+            // where `within_slo` is the count of requests in the le<=1s
+            // histogram bucket. Without this line the 503 is counted only as
+            // an error and NEVER enters the histogram, so it is subtracted
+            // from `within_slo` without ever having been added to it -> a
+            // double penalty that drives availability to ~(100 - 2*err%)
+            // (e.g. 21.5% err showed 57% instead of the honest ~78.5%).
+            //
+            // The shed happens before the app runs, so the response is
+            // effectively instant (~1ms) and lands in the smallest bucket.
+            // Now the 503 appears in BOTH `within_slo` and `errors`, the two
+            // cancel in the numerator, and availability reads the true
+            // success-and-fast fraction. Side effect: fast 503 samples enter
+            // the latency distribution, so P50 dips slightly; P95/P99 (the
+            // SLO percentiles, set by the slow 2xx tail) are unaffected.
+            MetricsStore::observe(
+                'nexus_http_request_duration_seconds',
+                0.001,
+                NEXUS_HTTP_BUCKETS,
+                ['endpoint' => $endpoint, 'method' => $method]
+            );
 
             echo '{"error":"service unavailable","reason":"rate limited"}';
             exit; // do NOT run the app, do NOT count in-flight, do NOT register shutdown

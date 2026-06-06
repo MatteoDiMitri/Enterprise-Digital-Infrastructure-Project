@@ -50,18 +50,14 @@ class DDoSUser(HttpUser):
     @task
     def flood_home(self):
         with self.client.get(
-            "/",
-            name="GET / (flood)",
+            "/index.php",                 # era "/" — endpoint troppo leggero
+            name="GET /index.php (flood)",
             catch_response=True,
-        ) as r:
-            # Mark overload responses as failures so Locust's own stats
-            # reflect the attack. 503 = the server's load-shedding gate
-            # (see _prepend.php); 5xx in general = server in trouble.
+         ) as r:
             if r.status_code >= 500:
-                r.failure(f"server overloaded: HTTP {r.status_code}")
+                 r.failure(f"server overloaded: HTTP {r.status_code}")
             elif r.status_code == 429:
-                r.failure("rate limited: HTTP 429")
-            # 2xx/3xx: leave as success (default).
+                 r.failure("rate limited: HTTP 429")
 
 
 class DDoSShape(LoadTestShape):
@@ -81,10 +77,10 @@ class DDoSShape(LoadTestShape):
     own CPU — if it's pegged, you're measuring the client, not the server).
     """
     stages = [
-        (8,   50,   50),
-        (18,  1200, 300),
-        (60,  1200, 1),
-        (85,  15,   100),
+        (8,   40,   40),
+        (18,  200,  50),    # era 400 @ 200/s — troppo per il client su /index.php
+        (60,  200,  1),
+        (85,  15,   80),
     ]
 
     def tick(self):
