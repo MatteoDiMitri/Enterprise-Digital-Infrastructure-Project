@@ -678,10 +678,20 @@ async function pollMetrics() {
 }
 
 async function pollLogs() {
-  // Not implemented in this deployment: application logs are written
-  // to the Apache logs (/var/log/apache2/) and Locust logs are in the
-  // Locust UI. The live logs panel is intentionally left empty here.
-  return;
+  try {
+    // 1. Fetch the logs from our future backend endpoint
+    // We append the current logFilter (All, INFO, WARN, etc.) as a query parameter
+    const logs = await fetchJSON(`/api/logs?level=${logFilter}`);
+    
+    // 2. Render the logs using your existing renderLogs function
+    renderLogs(logs);
+    
+  } catch (e) {
+    console.error("Failed to fetch logs:", e);
+    // Optional: Show a little visual indicator that log fetching failed
+    const container = document.getElementById('logs-body');
+    container.innerHTML = `<div class="log-line"><span class="log-msg" style="color:var(--red);">Error connecting to log stream...</span></div>`;
+  }
 }
 
 async function pollExperiments() {
