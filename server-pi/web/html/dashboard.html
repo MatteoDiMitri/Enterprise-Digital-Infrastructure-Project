@@ -679,18 +679,18 @@ async function pollMetrics() {
 
 async function pollLogs() {
   try {
-    // 1. Fetch the logs from our future backend endpoint
-    // We append the current logFilter (All, INFO, WARN, etc.) as a query parameter
-    const logs = await fetchJSON(`/api/logs?level=${logFilter}`);
+    // ALWAYS fetch the full firehose from the backend, regardless of buttons clicked
+    const logs = await fetchJSON(`/api/logs`);
     
-    // 2. Render the logs using your existing renderLogs function
-    renderLogs(logs);
+    // Save the raw, unfiltered data to our global variable
+    currentLogs = logs; 
     
+    // Pass it through our visual filters before putting it on the screen
+    applyFilters();
   } catch (e) {
     console.error("Failed to fetch logs:", e);
-    // Optional: Show a little visual indicator that log fetching failed
     const container = document.getElementById('logs-body');
-    container.innerHTML = `<div class="log-line"><span class="log-msg" style="color:var(--red);">Error connecting to log stream...</span></div>`;
+    container.innerHTML = `<div class="log-line"><span class="log-msg" style="color:var(--red);">Error connecting to log stream. Check console for details.</span></div>`;
   }
 }
 
@@ -981,11 +981,36 @@ function renderBanner(state) {
 // LOGS
 // ─────────────────────────────────────────────────────────────────────────────
 let logFilter = 'all';
+let serviceFilter = 'all';
+let currentLogs = []; // This stores the complete firehose of data
+
 function setLogFilter(f, el) {
   logFilter = f;
-  document.querySelectorAll('.log-filter-btn').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.lvl-btn').forEach(b => b.classList.remove('active'));
   el.classList.add('active');
-  pollLogs();
+  
+  // Instantly apply the filter to the data we already have (no network request!)
+  applyFilters(); 
+}
+function setServiceFilter(f, el) {
+  serviceFilter = f;
+  document.querySelectorAll('.svc-btn').forEach(b => b.classList.remove('active'));
+  el.classList.add('active');
+  
+  // Instantly apply the filter to the data we already have
+  applyFilters(); 
+}
+function applyFilters() {
+  // Filter the raw data using JavaScript directly in the browser
+  const filtered = currentLogs.filter(log => {
+    const matchLevel = (logFilter === 'all') || (log.level === logFilter.toUpperCase());
+    const matchService = (serviceFilter === 'all') || (log.service === serviceFilter);
+    
+    return matchLevel && matchService;
+  });
+  
+  // Send the filtered list to your existing render function
+  renderLogs(filtered);
 }
 function renderLogs(entries) {
   const container = document.getElementById('logs-body');
