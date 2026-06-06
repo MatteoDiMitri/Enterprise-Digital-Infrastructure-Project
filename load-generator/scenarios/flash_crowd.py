@@ -70,7 +70,7 @@ class FlashCrowdShape(LoadTestShape):
     stages = [
         (2,  60,   40),     # 0–5s : baseline, connections warm up gently
         (15, 120,  65),     # 5–20s: ramp to 350 at 40/s (fast but no cold-connect storm)
-        (90, 120,  55),      # 20–90s: HOLD at 350 — read the dashboard HERE
+        (90, 121,  55),      # 20–90s: HOLD at 350 — read the dashboard HERE
     ]
     # --- Alternatives (swap the block above) -------------------------------
     # Push the edge (expect the first real 5xx + queue spikes; ~450 is the
