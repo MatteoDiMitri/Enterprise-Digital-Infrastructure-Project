@@ -54,6 +54,36 @@ services:
     depends_on:
       - prometheus
 
+  cpu-load:
+    image: python:3.11-slim
+    restart: unless-stopped
+    volumes:
+      - ./scenario_cpu_load.py:/app/scenario_cpu_load.py
+      - shared_tmp:/tmp
+    working_dir: /app
+    environment:
+      - NEXUS_SCENARIO_FILE=/tmp/nexus_active_scenario.json
+      - NEXUS_BURN_DUTY=0.85
+      - NEXUS_BURN_SCENARIO=ddos
+    command: ["python3", "scenario_cpu_load.py"]
+    depends_on:
+      - web
+
+  saturation-load:
+    image: python:3.11-slim
+    restart: unless-stopped
+    volumes:
+      - ./scenario_cpu_load.py:/app/scenario_cpu_load.py
+      - shared_tmp:/tmp
+    working_dir: /app
+    environment:
+      - NEXUS_SCENARIO_FILE=/tmp/nexus_active_scenario.json
+      - NEXUS_BURN_DUTY=0.85
+      - NEXUS_BURN_SCENARIO=saturation
+    command: ["python3", "scenario_cpu_load.py"]
+    depends_on:
+      - web
+
 volumes:
   db_data:
   prom_data:
