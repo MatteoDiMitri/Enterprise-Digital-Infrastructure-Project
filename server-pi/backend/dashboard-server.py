@@ -448,25 +448,35 @@ class NexusHandler(http.server.BaseHTTPRequestHandler):
         self._send_cors_preflight()
 
     def do_GET(self):
-        # We need to parse the query parameters now, not just the path!
+        # Parse the URL and query parameters
         parsed_url = urllib.parse.urlparse(self.path)
         path = parsed_url.path
 
         if path == '/api/dashboard_metrics':
-            # ... (your existing metrics code) ...
+            try:
+                payload = collect_dashboard_metrics()
+                self._send_json(200, payload)
+            except Exception as e:
+                # Include full traceback in the response and in journald.
+                import traceback
+                tb = traceback.format_exc()
+                print(f'[ERROR /api/dashboard_metrics] {e}\n{tb}', flush=True)
+                self._send_json(500, {
+                    'error': str(e),
+                    'type': type(e).__name__,
+                    'traceback': tb.splitlines()[-10:],
+                })
             return
 
         if path == '/api/scenario':
-            # ... (your existing scenario code) ...
+            self._send_json(200, read_scenario_file())
             return
 
         if path == '/healthz':
-            # ... (your existing healthz code) ...
+            self._send_json(200, {'status': 'ok', 'prom': PROM_URL})
             return
 
-        # --- ADD THIS ENTIRE NEW BLOCK ---
         if path == '/api/logs':
-            # Extract the '?level=...' filter from the URL, default to 'ALL'
             query_params = urllib.parse.parse_qs(parsed_url.query)
             level = query_params.get('level', ['all'])[0].upper()
 
@@ -479,20 +489,20 @@ class NexusHandler(http.server.BaseHTTPRequestHandler):
 
             for service_name in containers_to_monitor:
                 try:
-                    # Search for the container
+                    # Find the running container matching the service name
                     container_list = docker_client.containers.list(filters={"name": service_name})
                     if not container_list:
                         continue
                         
                     container = container_list[0]
-                    # Get the last 30 lines of logs
+                    # Fetch the last 30 log lines
                     raw_logs = container.logs(tail=30, stdout=True, stderr=True).decode('utf-8', errors='replace')
                     
                     for line in raw_logs.splitlines():
                         if not line.strip():
                             continue
                         
-                        # Basic keyword parser to assign CSS severity levels
+                        # Basic parser to assign CSS severity levels
                         line_upper = line.upper()
                         detected_level = "INFO"
                         if "ERROR" in line_upper or "FATAL" in line_upper:
@@ -502,10 +512,11 @@ class NexusHandler(http.server.BaseHTTPRequestHandler):
                         elif "CRIT" in line_upper:
                             detected_level = "CRITICAL"
 
-                        # Apply the frontend filter
+                        # Apply frontend filter
                         if level != "ALL" and detected_level != level:
                             continue
 
+                        # Format the log line for the frontend table
                         logs_output.append({
                             "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(),
                             "level": detected_level,
@@ -515,13 +526,12 @@ class NexusHandler(http.server.BaseHTTPRequestHandler):
                 except Exception as e:
                     print(f"[ERROR] failed reading logs for {service_name}: {e}")
 
-            # Sort so the newest logs are at the top
+            # Sort the combined logs by timestamp so they appear in order
             logs_output.sort(key=lambda x: x["timestamp"], reverse=True)
             self._send_json(200, logs_output)
             return
-        # ---------------------------------
 
-        # Fallback 404 (Keep your existing code here)
+        # Fallback 404
         self._send_json(404, {'error': 'not found', 'path': path})
 
     def do_POST(self):
