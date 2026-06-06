@@ -444,11 +444,21 @@
       <div class="logs-header">
         <span class="logs-title">Live system logs</span>
         <div class="logs-controls">
-          <button class="log-filter-btn active" onclick="setLogFilter('all',this)">All</button>
-          <button class="log-filter-btn" onclick="setLogFilter('INFO',this)">Info</button>
-          <button class="log-filter-btn" onclick="setLogFilter('WARN',this)">Warn</button>
-          <button class="log-filter-btn" onclick="setLogFilter('ERROR',this)">Error</button>
-          <button class="log-filter-btn" onclick="setLogFilter('CRITICAL',this)">Critical</button>
+          
+          <div class="filter-group">
+            <button class="log-filter-btn svc-btn active" onclick="setServiceFilter('all',this)">All Services</button>
+            <button class="log-filter-btn svc-btn" onclick="setServiceFilter('web',this)">Web</button>
+            <button class="log-filter-btn svc-btn" onclick="setServiceFilter('db',this)">DB</button>
+          </div>
+          
+          <div class="filter-group">
+            <button class="log-filter-btn lvl-btn active" onclick="setLogFilter('all',this)">All Levels</button>
+            <button class="log-filter-btn lvl-btn" onclick="setLogFilter('INFO',this)">Info</button>
+            <button class="log-filter-btn lvl-btn" onclick="setLogFilter('WARN',this)">Warn</button>
+            <button class="log-filter-btn lvl-btn" onclick="setLogFilter('ERROR',this)">Error</button>
+            <button class="log-filter-btn lvl-btn" onclick="setLogFilter('CRITICAL',this)">Critical</button>
+          </div>
+
         </div>
       </div>
       <div class="logs-body" id="logs-body"><div class="log-line"><span class="log-msg" style="color:var(--muted);">Waiting for log data…</span></div></div>
