@@ -342,14 +342,9 @@ def collect_endpoints() -> list[dict]:
     err_map = index_by_ep(err_series)
 
     endpoints = []
-    # Exclude internal monitoring endpoints (the dashboard polls these itself).
-    internal_exclude = {'/api/dashboard_metrics', '/api/scenario', '/api/logs'}
     for row in series:
         ep      = row['metric'].get('endpoint', '/')
         method  = row['metric'].get('method', 'GET')
-        # Skip internal endpoints to avoid the dashboard counting its own polling.
-        if ep in internal_exclude:
-            continue
         val = row.get('value', [None, None])
         if len(val) <= 1:
             continue
