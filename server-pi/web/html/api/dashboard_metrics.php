@@ -389,9 +389,19 @@ function nexus_collect_endpoints(): array
     if (($j['status'] ?? '') !== 'success') return [];
 
     $endpoints = [];
+    // Exclude internal monitoring endpoints (the dashboard polls these itself).
+    $internal_exclude = [
+        '/api/dashboard_metrics',
+        '/api/scenario',
+        '/api/logs',
+    ];
     foreach ($j['data']['result'] ?? [] as $row) {
         $ep      = $row['metric']['endpoint'] ?? '/';
         $method  = $row['metric']['method']   ?? 'GET';
+        // Skip internal endpoints to avoid the dashboard counting its own polling.
+        if (in_array($ep, $internal_exclude, true)) {
+            continue;
+        }
         $rateRPS = (float)$row['value'][1];
 
         // Per-endpoint p95 latency
