@@ -45,16 +45,14 @@ services:
   dashboard-backend:
     image: python:3.11-slim
     ports:
-      - "8881:8081"
+      - "8881:8081"  # Dashboard backend available on host port 8881 (container:8081)
     volumes:
       - ./backend/dashboard-server.py:/app/dashboard-server.py
       - shared_tmp:/tmp
-      - /var/run/docker.sock:/var/run/docker.sock:ro
     working_dir: /app
+    command: ["python3", "dashboard-server.py"]
     depends_on:
       - prometheus
-    command: >
-      bash -c "pip install docker && python3 dashboard-server.py"
 
   cpu-load:
     image: python:3.11-slim

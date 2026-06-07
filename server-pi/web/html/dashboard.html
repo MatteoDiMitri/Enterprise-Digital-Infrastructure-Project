@@ -94,7 +94,7 @@
   .scenario-banner-msg { font-size: 12px; color: var(--text); }
   .scenario-banner-time { font-family: var(--mono); font-size: 12px; color: var(--amber); }
 
-  /* ── KPI CARDS ── */
+  /* ── KPI CARDS ── 4 columns × 2 rows = 8 cards */
   .kpi-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 1.5rem; }
   .kpi-card {
     background: var(--surface); border: 1px solid var(--border);
@@ -163,23 +163,13 @@
     padding: 0.75rem 1.25rem; border-bottom: 1px solid var(--border);
   }
   .logs-title { font-family: var(--mono); font-size: 11px; color: var(--muted); letter-spacing: 0.08em; text-transform: uppercase; }
-  .logs-controls { display: flex; gap: 8px; align-items: center; }
-
-  /* dropdown filters */
-  .log-select-wrap { position: relative; display: flex; align-items: center; }
-  .log-select-wrap::after {
-    content: '▾'; position: absolute; right: 8px; pointer-events: none;
-    font-size: 9px; color: var(--muted); line-height: 1;
+  .logs-controls { display: flex; gap: 8px; }
+  .log-filter-btn {
+    font-family: var(--mono); font-size: 9px; letter-spacing: 0.06em; text-transform: uppercase;
+    padding: 3px 8px; border-radius: 3px; border: 1px solid var(--border); background: transparent;
+    color: var(--muted); cursor: pointer; transition: all 0.15s;
   }
-  .log-select {
-    font-family: var(--mono); font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase;
-    padding: 4px 24px 4px 9px; border-radius: 4px;
-    border: 1px solid var(--border); background: var(--surface2);
-    color: var(--muted); cursor: pointer; appearance: none; outline: none;
-    transition: border-color 0.15s, color 0.15s;
-  }
-  .log-select:hover, .log-select:focus { border-color: rgba(255,255,255,0.18); color: var(--text); }
-  .log-select.active { border-color: rgba(255,255,255,0.18); color: var(--text); }
+  .log-filter-btn.active { background: rgba(255,255,255,0.08); color: var(--text); border-color: rgba(255,255,255,0.15); }
   .logs-body { padding: 0.75rem 1.25rem; font-family: var(--mono); font-size: 11px; max-height: 280px; overflow-y: auto; line-height: 1.9; }
   .log-line { display: flex; gap: 12px; align-items: baseline; }
   .log-time { color: var(--muted); min-width: 70px; }
@@ -281,6 +271,8 @@
 </div>
 
 <div class="layout">
+
+  <!-- MAIN -->
   <main>
 
     <!-- ACTIVE SCENARIO BANNER -->
@@ -345,7 +337,7 @@
       </div>
     </div>
 
-    <!-- CHARTS ROW 1 -->
+    <!-- CHARTS ROW 1: Latency percentiles + Status distribution -->
     <div class="charts-row">
       <div class="chart-card">
         <div class="chart-header">
@@ -367,7 +359,7 @@
       </div>
     </div>
 
-    <!-- CHARTS ROW 2 -->
+    <!-- CHARTS ROW 2: RPS + Error rate dual, Queue depth -->
     <div class="charts-row2">
       <div class="chart-card">
         <div class="chart-header">
@@ -393,7 +385,7 @@
       </div>
     </div>
 
-    <!-- CHARTS ROW 3 -->
+    <!-- CHARTS ROW 3: Resources -->
     <div class="charts-row2">
       <div class="chart-card">
         <div class="chart-header">
@@ -412,6 +404,9 @@
         <div class="topology-grid" id="topology"></div>
       </div>
     </div>
+
+    <!-- SCENARIO CONTROL -->
+    
 
     <!-- ENDPOINT TABLE -->
     <div class="table-card">
@@ -449,21 +444,11 @@
       <div class="logs-header">
         <span class="logs-title">Live system logs</span>
         <div class="logs-controls">
-          <div class="log-select-wrap">
-            <select class="log-select" id="svc-select" onchange="setServiceFilter(this.value, this)">
-              <option value="all">All services</option>
-              <!-- populated dynamically from log data -->
-            </select>
-          </div>
-          <div class="log-select-wrap">
-            <select class="log-select" id="lvl-select" onchange="setLogFilter(this.value, this)">
-              <option value="all">All levels</option>
-              <option value="INFO">Info</option>
-              <option value="WARN">Warn</option>
-              <option value="ERROR">Error</option>
-              <option value="CRITICAL">Critical</option>
-            </select>
-          </div>
+          <button class="log-filter-btn active" onclick="setLogFilter('all',this)">All</button>
+          <button class="log-filter-btn" onclick="setLogFilter('INFO',this)">Info</button>
+          <button class="log-filter-btn" onclick="setLogFilter('WARN',this)">Warn</button>
+          <button class="log-filter-btn" onclick="setLogFilter('ERROR',this)">Error</button>
+          <button class="log-filter-btn" onclick="setLogFilter('CRITICAL',this)">Critical</button>
         </div>
       </div>
       <div class="logs-body" id="logs-body"><div class="log-line"><span class="log-msg" style="color:var(--muted);">Waiting for log data…</span></div></div>
@@ -485,9 +470,19 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // CONFIG
 // ─────────────────────────────────────────────────────────────────────────────
+// API_BASE: where to fetch telemetry from.
+//
+// Default: same origin, port 8081 — the standalone Python dashboard
+// server (Apache-independent). This way, even when Apache is saturated
+// by Locust traffic, the dashboard keeps updating.
+//
+// To override (e.g. for local dev), append #api=URL to the dashboard
+// URL: http://raspberry/dashboard.html#api=http://localhost:9090
+// or set to empty string to use same-origin Apache (legacy mode).
 const API_BASE = (() => {
   const hash = location.hash.match(/api=([^&]+)/);
   if (hash) return decodeURIComponent(hash[1]);
+  // Default: use the dedicated dashboard server on port 8081
   return `${location.protocol}//${location.hostname}:8881`;
 })();
 const POLL_MS  = 2000;
@@ -517,6 +512,7 @@ const baseLineOpts = {
   }
 };
 
+// Latency: 3 series (P50, P95, P99)
 const latChart = new Chart(document.getElementById('latChart').getContext('2d'), {
   type: 'line',
   data: {
@@ -530,6 +526,7 @@ const latChart = new Chart(document.getElementById('latChart').getContext('2d'),
   options: baseLineOpts,
 });
 
+// RPS + error rate (dual axis)
 const rpsChart = new Chart(document.getElementById('rpsChart').getContext('2d'), {
   type: 'line',
   data: {
@@ -549,6 +546,7 @@ const rpsChart = new Chart(document.getElementById('rpsChart').getContext('2d'),
   },
 });
 
+// Queue depth + DB latency
 const queueChart = new Chart(document.getElementById('queueChart').getContext('2d'), {
   type: 'line',
   data: {
@@ -568,6 +566,7 @@ const queueChart = new Chart(document.getElementById('queueChart').getContext('2
   },
 });
 
+// CPU + memory
 const resChart = new Chart(document.getElementById('resChart').getContext('2d'), {
   type: 'line',
   data: {
@@ -580,6 +579,7 @@ const resChart = new Chart(document.getElementById('resChart').getContext('2d'),
   options: { ...baseLineOpts, scales: { ...baseLineOpts.scales, y: { ...baseLineOpts.scales.y, max: 100 } } },
 });
 
+// Status distribution donut
 const errChart = new Chart(document.getElementById('errChart').getContext('2d'), {
   type: 'doughnut',
   data: {
@@ -600,10 +600,13 @@ const errChart = new Chart(document.getElementById('errChart').getContext('2d'),
 // DATA FETCH / UPDATE LOOP
 // ─────────────────────────────────────────────────────────────────────────────
 let lastApiOk = false;
-let lastSuccessfulPollAt = null;
+let lastSuccessfulPollAt = null;   // timestamp of last successful poll
 let consecutiveFailures = 0;
 
 async function fetchJSON(path, timeoutMs = 3000) {
+  // AbortController so a slow/hung backend doesn't pile up requests.
+  // Without this, if Apache stops responding the browser opens more and
+  // more pending fetches that never complete.
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), timeoutMs);
   try {
@@ -624,6 +627,9 @@ function setApiStatus(ok, text) {
 
 async function pollMetrics() {
   try {
+    // The PHP shim translates PromQL into the JSON shape this dashboard
+    // expects. Lives at /var/www/html/api/dashboard_metrics.php on the
+    // Raspberry.
     const m = await fetchJSON('/api/dashboard_metrics');
     consecutiveFailures = 0;
     lastSuccessfulPollAt = Date.now();
@@ -634,17 +640,24 @@ async function pollMetrics() {
     const upd = document.getElementById('last-update');
     if (upd) {
       upd.textContent = 'last update: ' + new Date().toLocaleTimeString('it-IT');
-      upd.style.color = '';
+      upd.style.color = '';   // restore normal color after recovery
     }
     renderMetrics(m);
   } catch (e) {
     consecutiveFailures++;
     lastApiOk = false;
+    // Show the user HOW LONG telemetry has been down. Critically, we do
+    // NOT reset the charts to zero — keep the last known good values
+    // visible so the operator can see what happened just before the freeze.
     const staleSec = lastSuccessfulPollAt
       ? Math.floor((Date.now() - lastSuccessfulPollAt) / 1000)
       : null;
-    const msg = staleSec === null ? 'api: offline' : `api: offline · stale ${staleSec}s`;
+    const msg = staleSec === null
+      ? 'api: offline'
+      : `api: offline · stale ${staleSec}s`;
     setApiStatus(false, msg);
+    // Visual warning when telemetry has been down for over 10 seconds:
+    // tag the "last update" timestamp red so the operator notices.
     if (staleSec !== null && staleSec > 10) {
       const upd = document.getElementById('last-update');
       if (upd) upd.style.color = 'var(--danger, #ef4444)';
@@ -652,6 +665,10 @@ async function pollMetrics() {
   }
 
   try {
+    // /api/scenario reports the currently active Locust scenario. Updated
+    // by the FastAPI launcher when a scenario starts/stops. Note: this is
+    // ALSO served by Apache, so if Apache is dead this will fail too —
+    // but the banner just hides itself silently, which is fine.
     const state = await fetchJSON('/api/scenario', 2000);
     renderBanner({
       active:     state.scenario === 'idle' ? null : state.scenario,
@@ -661,23 +678,30 @@ async function pollMetrics() {
 }
 
 async function pollLogs() {
-  try {
-    const logs = await fetchJSON('/api/logs');
-    currentLogs = logs;
-    syncServiceDropdown(logs);  // dynamically add any new service names
-    applyFilters();
-  } catch (e) {
-    console.error("Failed to fetch logs:", e);
-    const container = document.getElementById('logs-body');
-    container.innerHTML = `<div class="log-line"><span class="log-msg" style="color:var(--red);">Error connecting to log stream.</span></div>`;
-  }
+  // Not implemented in this deployment: application logs are written
+  // to the Apache logs (/var/log/apache2/) and Locust logs are in the
+  // Locust UI. The live logs panel is intentionally left empty here.
+  return;
 }
 
-async function pollExperiments() { return; }
+async function pollExperiments() {
+  // Not implemented in this deployment. To preserve experiment history
+  // persist completed runs to a database table or JSON store.
+  return;
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // RENDER
 // ─────────────────────────────────────────────────────────────────────────────
+function setKpi(card, valueId, value, deltaId, deltaText, severity) {
+  document.getElementById(valueId).innerHTML = value;
+  document.getElementById(deltaId).textContent = deltaText;
+  const cardEl = document.getElementById(card);
+  cardEl.classList.remove('warning', 'danger');
+  if (severity === 'warn')   cardEl.classList.add('warning');
+  if (severity === 'danger') cardEl.classList.add('danger');
+}
+
 function colorFor(value, warnAbove, dangerAbove) {
   if (value > dangerAbove) return 'var(--red)';
   if (value > warnAbove)   return 'var(--amber)';
@@ -685,10 +709,11 @@ function colorFor(value, warnAbove, dangerAbove) {
 }
 
 function renderDonut(sd) {
-  if (!sd) return;
   const vals = [sd['2xx'] || 0, sd['3xx'] || 0, sd['4xx'] || 0, sd['5xx'] || 0];
   const total = vals.reduce((a, b) => a + b, 0);
+
   if (total === 0) {
+    // No traffic: show a neutral grey donut so the chart doesn't disappear
     errChart.data.labels = ['No traffic'];
     errChart.data.datasets[0].data = [1];
     errChart.data.datasets[0].backgroundColor = ['#2a3344'];
@@ -703,8 +728,11 @@ function renderDonut(sd) {
 function renderMetrics(m) {
   const k = m.kpi || {};
 
+  // KPI cards
   document.getElementById('kpi-rps').innerHTML   = `${k.rps ?? '—'} <span class="kpi-unit">req/s</span>`;
-  document.getElementById('kpi-rps-d').textContent = m.scenario === 'idle' ? 'baseline state' : `scenario: ${m.scenario}`;
+  document.getElementById('kpi-rps-d').textContent = m.scenario === 'idle'
+    ? 'baseline state'
+    : `scenario: ${m.scenario}`;
 
   document.getElementById('kpi-p99').innerHTML   = `${k.latency_p99 ?? '—'} <span class="kpi-unit">ms</span>`;
   document.getElementById('kpi-p99').style.color = colorFor(k.latency_p99 || 0, 500, 1000);
@@ -730,6 +758,9 @@ function renderMetrics(m) {
   document.getElementById('kpi-svcs-d').textContent = hh < tt ? `${tt - hh} service${tt - hh === 1 ? '' : 's'} down/degraded` : 'all healthy';
 
   document.getElementById('kpi-cpu').innerHTML   = `${k.cpu ?? '—'} <span class="kpi-unit">%</span>`;
+  // CPU traffic light: green 0–40, amber 41–69, red ≥70. We deliberately go
+  // red well before the CPU is maxed out — the Raspberry should never be
+  // pushed needlessly, so 70% is treated as "hot", not "fine".
   document.getElementById('kpi-cpu').style.color = colorFor(k.cpu || 0, 40, 69);
   document.getElementById('kpi-card-cpu').classList.toggle('warning', (k.cpu || 0) > 40 && (k.cpu || 0) <= 69);
   document.getElementById('kpi-card-cpu').classList.toggle('danger',  (k.cpu || 0) > 69);
@@ -746,18 +777,29 @@ function renderMetrics(m) {
   document.getElementById('kpi-slo').style.color = sloColor;
   document.getElementById('kpi-card-slo').classList.toggle('warning', slo === 'at_risk');
   document.getElementById('kpi-card-slo').classList.toggle('danger',  slo === 'violation');
-  document.getElementById('kpi-slo-d').textContent = { ok: 'all targets met', at_risk: 'thresholds approaching', violation: 'one or more targets breached' }[slo];
+  document.getElementById('kpi-slo-d').textContent = {
+    ok: 'all targets met',
+    at_risk: 'thresholds approaching',
+    violation: 'one or more targets breached',
+  }[slo];
 
+  // Topbar SLO pill
   const pill = document.getElementById('slo-pill');
   pill.classList.remove('warning', 'danger');
   if (slo === 'at_risk') pill.classList.add('warning');
   if (slo === 'violation') pill.classList.add('danger');
-  document.getElementById('slo-text').textContent = { ok: 'All systems nominal', at_risk: 'SLO at risk', violation: 'SLO violation' }[slo];
+  document.getElementById('slo-text').textContent = {
+    ok: 'All systems nominal',
+    at_risk: 'SLO at risk',
+    violation: 'SLO violation',
+  }[slo];
 
-  document.getElementById('lat-now').textContent   = `P99 ${k.latency_p99 || 0}ms`;
-  document.getElementById('rps-now').textContent   = `${k.rps || 0} req/s · ${(k.error_rate || 0).toFixed(1)}%`;
+  // "Current value" labels next to chart titles
+  document.getElementById('lat-now').textContent = `P99 ${k.latency_p99 || 0}ms`;
+  document.getElementById('rps-now').textContent = `${k.rps || 0} req/s · ${(k.error_rate || 0).toFixed(1)}%`;
   document.getElementById('queue-now').textContent = `${k.queue_depth || 0} pending`;
 
+  // Charts — replace data outright (the backend keeps history for us)
   const h = m.history || {};
   if (h.latency_p50 && h.latency_p95 && h.latency_p99) {
     latChart.data.datasets[0].data = h.latency_p50;
@@ -785,8 +827,14 @@ function renderMetrics(m) {
     resChart.update('none');
   }
 
+  // Status distribution donut
+  const sd = m.status_distribution || { '2xx': 1, '3xx': 0, '4xx': 0, '5xx': 0 };
   renderDonut(m.status_distribution);
+
+  // Service topology
   renderTopology(m.services || {});
+
+  // Endpoint table
   renderEndpoints(m.endpoints || []);
 }
 
@@ -807,6 +855,19 @@ function renderTopology(services) {
         </div>
       </div>`;
   }).join('');
+
+  // Sidebar service badges
+  SVCS.forEach(name => {
+    const badge = document.getElementById(`sb-${name}-badge`);
+    if (!badge) return;
+    const s = services[name] || { status: 'healthy' };
+    badge.classList.remove('ok', 'warn');
+    if (s.status === 'healthy') { badge.classList.add('ok'); badge.textContent = 'UP'; }
+    else if (s.status === 'warning') { badge.classList.add('warn'); badge.textContent = 'WARN'; }
+    else if (s.status === 'degraded') { badge.textContent = 'DEGRADED'; }
+    else if (s.status === 'down') { badge.textContent = 'DOWN'; }
+    else { badge.classList.add('ok'); badge.textContent = 'UP'; }
+  });
 }
 
 function renderEndpoints(endpoints) {
@@ -828,6 +889,32 @@ function renderEndpoints(endpoints) {
 }
 
 let currentExperiments = [];
+function renderExperiments(runs) {
+  currentExperiments = runs;
+  const tbody = document.getElementById('experiments-table');
+  if (!runs.length) {
+    tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:var(--muted);">No experiments yet — run a scenario above to populate.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = runs.slice().reverse().map(r => {
+    const sloCls = r.slo_met ? 'slo-ok' : 'slo-fail';
+    const sloTxt = r.slo_met ? '✓ met' : '✗ breach';
+    const rec    = r.recovery_sec != null ? `${r.recovery_sec}s` : '—';
+    const time   = new Date(r.started_at).toLocaleTimeString('it-IT');
+    return `<tr>
+      <td>${r.scenario}</td>
+      <td>${time}</td>
+      <td>${r.duration_sec}s</td>
+      <td>${r.peak_rps}</td>
+      <td>${r.peak_latency_p99}ms</td>
+      <td>${r.peak_error_rate}%</td>
+      <td>${rec}</td>
+      <td class="${sloCls}">${sloTxt}</td>
+      <td style="max-width:280px;white-space:normal;color:var(--muted);">${r.notes || ''}</td>
+    </tr>`;
+  }).join('');
+}
+
 function exportExperimentsCSV() {
   if (!currentExperiments.length) { showNotif('⚠️', 'Nothing to export', 'Run at least one scenario first.'); return; }
   const header = ['scenario','started_at','duration_sec','peak_rps','peak_latency_p99_ms','peak_error_rate','recovery_sec','slo_met','notes'];
@@ -846,11 +933,17 @@ function exportExperimentsCSV() {
 
 // ─────────────────────────────────────────────────────────────────────────────
 // ACTIVE SCENARIO BANNER
+// Purely informational on the dashboard: it shows the currently running scenario
+// reported by the API. Scenarios are now launched from control_panel.html.
 // ─────────────────────────────────────────────────────────────────────────────
 let activeScenarioStart = null;
 function renderBanner(state) {
   const banner = document.getElementById('scenario-banner');
-  if (!state.active) { banner.classList.remove('show'); activeScenarioStart = null; return; }
+  if (!state.active) {
+    banner.classList.remove('show');
+    activeScenarioStart = null;
+    return;
+  }
   banner.classList.add('show');
   const labels = {
     baseline: ['📊', 'Baseline load — generating steady traffic at ~40 RPS.'],
@@ -875,90 +968,27 @@ function renderBanner(state) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// LOGS — dropdown filters + dynamic service list built from live data
+// LOGS
 // ─────────────────────────────────────────────────────────────────────────────
-let logFilter     = 'all';
-let serviceFilter = 'all';
-let currentLogs   = [];
-let knownServices = new Set(); // grows automatically as new service names appear
-
-function setLogFilter(value) {
-  logFilter = value;
-  const sel = document.getElementById('lvl-select');
-  if (sel) sel.classList.toggle('active', value !== 'all');
-  applyFilters();
+let logFilter = 'all';
+function setLogFilter(f, el) {
+  logFilter = f;
+  document.querySelectorAll('.log-filter-btn').forEach(b => b.classList.remove('active'));
+  el.classList.add('active');
+  pollLogs();
 }
-
-function setServiceFilter(value) {
-  serviceFilter = value;
-  const sel = document.getElementById('svc-select');
-  if (sel) sel.classList.toggle('active', value !== 'all');
-  applyFilters();
-}
-
-// Called after each log poll — adds any new service names to the dropdown
-function syncServiceDropdown(logs) {
-  const sel = document.getElementById('svc-select');
-  if (!sel) return;
-  let changed = false;
-  logs.forEach(log => {
-    const svc = (log.service || '').toLowerCase().trim();
-    if (svc && !knownServices.has(svc)) {
-      knownServices.add(svc);
-      changed = true;
-    }
-  });
-  if (!changed) return;
-  // Rebuild options, keeping current selection
-  const current = sel.value;
-  sel.innerHTML = '<option value="all">All services</option>' +
-    [...knownServices].sort().map(s =>
-      `<option value="${s}">${s.charAt(0).toUpperCase() + s.slice(1)}</option>`
-    ).join('');
-  sel.value = knownServices.has(current) ? current : 'all';
-}
-
-function applyFilters() {
-  const levelTarget   = logFilter.toUpperCase();
-  const serviceTarget = serviceFilter.toLowerCase();
-  const filtered = currentLogs.filter(log => {
-    const logLevel   = (log.level   || '').toUpperCase();
-    const logService = (log.service || '').toLowerCase();
-    const matchLevel   = (levelTarget   === 'ALL') || (logLevel   === levelTarget);
-    const matchService = (serviceTarget === 'all') || (logService === serviceTarget);
-    return matchLevel && matchService;
-  });
-  renderLogs(filtered);
-}
-
 function renderLogs(entries) {
   const container = document.getElementById('logs-body');
-  
-  // Controlliamo se l'utente è già in fondo alla finestra (scrolling intelligente)
-  // Questo evita che la pagina ti "strappi via" la visuale se stai leggendo un log vecchio
-  const isScrolledToBottom = container.scrollHeight - container.clientHeight <= container.scrollTop + 50;
-
-  if (!entries.length) {
-    container.innerHTML = '<div class="log-line"><span class="log-msg" style="color:var(--muted);">No logs matching this filter.</span></div>';
-    return;
-  }
-  
+  if (!entries.length) { container.innerHTML = '<div class="log-line"><span class="log-msg" style="color:var(--muted);">No logs matching this filter.</span></div>'; return; }
   container.innerHTML = entries.map(e => {
-    // Il timestamp ora viene dal backend, lo formattiamo bene
     const t = new Date(e.timestamp).toLocaleTimeString('it-IT');
-    const level = (e.level || 'INFO').toUpperCase();
     return `<div class="log-line">
       <span class="log-time">${t}</span>
-      <span class="log-level ${level}">${level}</span>
+      <span class="log-level ${e.level}">${e.level}</span>
       <span class="log-service">${e.service || ''}</span>
       <span class="log-msg">${e.message}</span>
     </div>`;
   }).join('');
-
-  // Se l'utente era in fondo, fai scorrere automaticamente i nuovi messaggi
-  if (isScrolledToBottom) {
-    container.scrollTop = container.scrollHeight;
-  }
 }
 
 function refreshAll() {
@@ -971,9 +1001,9 @@ function refreshAll() {
 // ─────────────────────────────────────────────────────────────────────────────
 let notifTimer;
 function showNotif(icon, title, msg) {
-  document.getElementById('notif-icon').textContent  = icon;
+  document.getElementById('notif-icon').textContent = icon;
   document.getElementById('notif-title').textContent = title;
-  document.getElementById('notif-msg').textContent   = msg;
+  document.getElementById('notif-msg').textContent = msg;
   const n = document.getElementById('notif');
   n.classList.add('show');
   clearTimeout(notifTimer);
@@ -987,6 +1017,7 @@ pollMetrics(); pollLogs(); pollExperiments();
 setInterval(pollMetrics, POLL_MS);
 setInterval(pollLogs, POLL_MS);
 setInterval(pollExperiments, 5000);
+
 </script>
 </body>
 </html>

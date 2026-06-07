@@ -43,21 +43,14 @@ import urllib.error
 import json
 import os
 import time
-import datetime      # <-- ADD THIS
-import docker        # <-- ADD THIS
+import threading
+from concurrent.futures import ThreadPoolExecutor
 
 # Configuration (environment)
 PROM_URL = os.environ.get('NEXUS_PROM_URL', 'http://prometheus:9090')
 BIND_HOST = os.environ.get('NEXUS_BIND_HOST', '0.0.0.0')
 BIND_PORT = int(os.environ.get('NEXUS_BIND_PORT', '8081'))
 SCENARIO_FILE = '/tmp/nexus_active_scenario.json'
-
-# --- ADD THIS NEW DOCKER BLOCK ---
-try:
-    docker_client = docker.from_env()
-except Exception as e:
-    print(f"Failed to connect to Docker: {e}")
-    docker_client = None
 
 # Query window and sampling
 RANGE_WINDOW_SEC = 90
@@ -448,9 +441,7 @@ class NexusHandler(http.server.BaseHTTPRequestHandler):
         self._send_cors_preflight()
 
     def do_GET(self):
-        # Parse the URL and query parameters
-        parsed_url = urllib.parse.urlparse(self.path)
-        path = parsed_url.path
+        path = urllib.parse.urlparse(self.path).path
 
         if path == '/api/dashboard_metrics':
             try:
@@ -458,13 +449,14 @@ class NexusHandler(http.server.BaseHTTPRequestHandler):
                 self._send_json(200, payload)
             except Exception as e:
                 # Include full traceback in the response and in journald.
+                # Never crash the server on a single bad poll.
                 import traceback
                 tb = traceback.format_exc()
                 print(f'[ERROR /api/dashboard_metrics] {e}\n{tb}', flush=True)
                 self._send_json(500, {
                     'error': str(e),
                     'type': type(e).__name__,
-                    'traceback': tb.splitlines()[-10:],
+                    'traceback': tb.splitlines()[-10:],   # last 10 lines is enough
                 })
             return
 
@@ -476,70 +468,6 @@ class NexusHandler(http.server.BaseHTTPRequestHandler):
             self._send_json(200, {'status': 'ok', 'prom': PROM_URL})
             return
 
-        if path == '/api/logs':
-            query_params = urllib.parse.parse_qs(parsed_url.query)
-            level = query_params.get('level', ['all'])[0].upper()
-
-            if not docker_client:
-                self._send_json(500, [{"timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(), "level": "ERROR", "service": "system", "message": "Docker socket not connected."}])
-                return
-
-            containers_to_monitor = ['web', 'db']
-            logs_output = []
-
-            for service_name in containers_to_monitor:
-                try:
-                    # Find the running container
-                    container_list = docker_client.containers.list(filters={"name": service_name})
-                    if not container_list:
-                        continue
-                        
-                    container = container_list[0]
-                    # 1. AGGIUNTO: timestamps=True per ottenere l'ora nativa di Docker
-                    raw_logs = container.logs(tail=30, stdout=True, stderr=True, timestamps=True).decode('utf-8', errors='replace')
-                    
-                    for line in raw_logs.splitlines():
-                        if not line.strip():
-                            continue
-                        
-                        # 2. Separiamo il timestamp nativo di Docker dal messaggio
-                        parts = line.split(" ", 1)
-                        if len(parts) == 2 and ("T" in parts[0] or "Z" in parts[0]):
-                            log_timestamp = parts[0]
-                            log_text = parts[1]
-                        else:
-                            # Fallback se la riga è strana
-                            log_timestamp = datetime.datetime.now(datetime.timezone.utc).isoformat()
-                            log_text = line
-                        
-                        # 3. Usiamo log_text invece di line per la nostra logica
-                        line_upper = log_text.upper()
-                        detected_level = "INFO"
-                        if "ERROR" in line_upper or "FATAL" in line_upper:
-                            detected_level = "ERROR"
-                        elif "WARN" in line_upper:
-                            detected_level = "WARN"
-                        elif "CRIT" in line_upper:
-                            detected_level = "CRITICAL"
-
-                        if level != "ALL" and detected_level != level:
-                            continue
-
-                        logs_output.append({
-                            "timestamp": log_timestamp,
-                            "level": detected_level,
-                            "service": service_name,
-                            "message": log_text[:200] + ("..." if len(log_text) > 200 else "")
-                        })
-                except Exception as e:
-                    print(f"[ERROR] failed reading logs for {service_name}: {e}")
-
-            # Sort the combined logs by timestamp so they appear in order
-            logs_output.sort(key=lambda x: x["timestamp"], reverse=True)
-            self._send_json(200, logs_output)
-            return
-
-        # Fallback 404
         self._send_json(404, {'error': 'not found', 'path': path})
 
     def do_POST(self):
